@@ -734,16 +734,37 @@ export function buildTubeMesh(pathPoints, radiiMm, sections = 40, capEnds = true
   const n = pathPoints.length
   if (n < 2) throw new Error('Need at least 2 points for tube')
 
-  const radiusPairAt = (index) => {
+  const sectionAt = (index) => {
     const value = radiiMm[index]
     if (typeof value === 'number') {
-      return { normal: value, binormal: value }
+      return { shape: 'ellipse', normal: value, binormal: value, squareness: 2 }
     }
     const radius = Number(value?.radius ?? value?.normal ?? value?.normalRadiusMm ?? 0)
+    const shape = value?.shape === 'roundedRect' ? 'roundedRect' : 'ellipse'
     return {
-      normal: Math.max(0.01, radius),
-      binormal: Math.max(0.01, radius),
+      shape,
+      normal: Math.max(0.01, Number(value?.normalRadiusMm ?? value?.normal ?? radius)),
+      binormal: Math.max(0.01, Number(value?.binormalRadiusMm ?? value?.binormal ?? radius)),
+      squareness: clamp(Number(value?.squareness) || 4.2, 2, 8),
     }
+  }
+
+  const signedPow = (v, power) => (
+    (v < 0 ? -1 : 1) * Math.pow(Math.abs(v), power)
+  )
+
+  const sectionOffset = (section, cosTheta, sinTheta) => {
+    if (section.shape === 'roundedRect') {
+      const power = 2 / section.squareness
+      return [
+        section.normal * signedPow(cosTheta, power),
+        section.binormal * signedPow(sinTheta, power),
+      ]
+    }
+    return [
+      section.normal * cosTheta,
+      section.binormal * sinTheta,
+    ]
   }
 
   // Compute tangents — endpoints hardcoded to [1,0,0] (perpendicular to cup wall)
@@ -797,12 +818,13 @@ export function buildTubeMesh(pathPoints, radiiMm, sections = 40, capEnds = true
     const binormal = unit(cross(t, normal))
     prevNormal = normal
 
-    const r = radiusPairAt(i)
+    const section = sectionAt(i)
     for (let j = 0; j < sections; j++) {
+      const [normalOffset, binormalOffset] = sectionOffset(section, cosA[j], sinA[j])
       vertices.push(
-        p[0] + r.normal * cosA[j] * normal[0] + r.binormal * sinA[j] * binormal[0],
-        p[1] + r.normal * cosA[j] * normal[1] + r.binormal * sinA[j] * binormal[1],
-        p[2] + r.normal * cosA[j] * normal[2] + r.binormal * sinA[j] * binormal[2],
+        p[0] + normalOffset * normal[0] + binormalOffset * binormal[0],
+        p[1] + normalOffset * normal[1] + binormalOffset * binormal[1],
+        p[2] + normalOffset * normal[2] + binormalOffset * binormal[2],
       )
     }
   }
@@ -830,7 +852,7 @@ export function buildTubeMesh(pathPoints, radiiMm, sections = 40, capEnds = true
 
   if (capEnds) {
     const startCenterIdx = vertices.length / 3
-    const startRadius = radiusPairAt(0)
+    const startRadius = sectionAt(0)
     const startInset = Math.max(0.15, Math.max(startRadius.normal, startRadius.binormal) * 0.07)
     vertices.push(
       pathPoints[0][0] + tangents[0][0] * startInset,
@@ -839,7 +861,7 @@ export function buildTubeMesh(pathPoints, radiiMm, sections = 40, capEnds = true
     )
 
     const endCenterIdx = vertices.length / 3
-    const endRadius = radiusPairAt(n - 1)
+    const endRadius = sectionAt(n - 1)
     const endInset = Math.max(0.15, Math.max(endRadius.normal, endRadius.binormal) * 0.07)
     vertices.push(
       pathPoints[n - 1][0] - tangents[n - 1][0] * endInset,
@@ -1191,13 +1213,22 @@ export function generateTubularHandle(strokePoints, params = {}) {
       c,
     ]
     const bossToRootRadius = (t) => spec.bossRadiusMm + (design.rootRadiusMm - spec.bossRadiusMm) * t
+    const roundedBossSection = (t) => {
+      const radius = bossToRootRadius(t)
+      return {
+        shape: 'roundedRect',
+        normalRadiusMm: radius,
+        binormalRadiusMm: radius * (1.28 - 0.28 * t),
+        squareness: 4.8 - 2.3 * t,
+      }
+    }
     return {
       points,
       radii: [
-        spec.bossRadiusMm,
-        spec.bossRadiusMm,
-        bossToRootRadius(0.35),
-        bossToRootRadius(0.72),
+        roundedBossSection(0),
+        roundedBossSection(0),
+        roundedBossSection(0.35),
+        roundedBossSection(0.72),
         design.rootRadiusMm,
       ],
     }
@@ -1243,7 +1274,7 @@ export function generateTubularHandle(strokePoints, params = {}) {
     notes: [
       ...design.notes,
       'Top ring and bottom platform share one vertical center axis.',
-      'Connector bosses stay circular, with boss diameter matched to the ring/base height.',
+      'Connector bosses use rounded-rectangle roots matched to the ring/base height.',
       'Integrated frame: handle roots are embedded directly into the ring and base edges.',
     ],
   })
