@@ -23,6 +23,45 @@ export default function ParameterPanel() {
     <div className="param-group">
       <h3>Parameters</h3>
 
+      <div className="param-choice-row">
+        <label>Fabrication</label>
+        <select
+          value={s.fabricationMode}
+          onChange={e => s.setFabricationMode(e.target.value)}
+        >
+          <option value="printed">Fully 3D Printed</option>
+          <option value="hybrid">Laser Cut + 3D Print</option>
+        </select>
+      </div>
+
+      {s.fabricationMode === 'hybrid' && (
+        <>
+          <div className="param-choice-row">
+            <label>Sleeve Style</label>
+            <select
+              value={s.sleeveStyle}
+              onChange={e => s.setSleeveStyle(e.target.value)}
+            >
+              <option value="tapered">Tapered Sleeve</option>
+              <option value="base">Base Integrated</option>
+            </select>
+          </div>
+
+          <div className="param-row">
+            <label>Sleeve Slit</label>
+            <input
+              type="range"
+              min={2}
+              max={24}
+              step={1}
+              value={s.sleeveSlitAngleDeg}
+              onChange={e => s.setSleeveSlitAngleDeg(Number(e.target.value))}
+            />
+            <span className="param-val">{s.sleeveSlitAngleDeg}deg</span>
+          </div>
+        </>
+      )}
+
       {sliders.map(row => (
         <div className="param-row" key={row.label}>
           <label>{row.label}</label>

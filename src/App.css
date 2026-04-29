@@ -116,6 +116,15 @@ body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background
 .param-row input, .param-row select {
   padding: 4px 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;
 }
+.param-choice-row {
+  display: grid; grid-template-columns: 100px 1fr;
+  align-items: center; gap: 6px;
+}
+.param-choice-row label { font-size: 11px; color: #555; white-space: nowrap; }
+.param-choice-row select {
+  width: 100%; padding: 4px 6px; border: 1px solid #ddd; border-radius: 4px;
+  background: #fff; color: #333; font-size: 12px;
+}
 .param-val { font-size: 11px; color: #888; text-align: right; white-space: nowrap; }
 
 /* Strength Report */
@@ -136,3 +145,57 @@ body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background
 .strength-table td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
 .strength-notes { margin: 4px 0 0; padding-left: 14px; color: #E65100; font-size: 10px; }
 .strength-notes li { margin-bottom: 2px; }
+
+@media (max-width: 700px) {
+  .app {
+    height: auto;
+    min-height: 100vh;
+    overflow: auto;
+  }
+
+  .header {
+    padding: 8px 12px;
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .main-layout {
+    min-height: 100vh;
+    overflow: visible;
+  }
+
+  .toolbar {
+    width: 44px;
+  }
+
+  .content-grid {
+    grid-template-columns: 1fr;
+    grid-template-rows: 42vh 42vh minmax(360px, auto) minmax(420px, auto);
+    overflow: visible;
+  }
+
+  .cell-canvas,
+  .cell-3d,
+  .cell-params,
+  .cell-output {
+    border-right: 0;
+  }
+
+  .cell-3d > div > div:first-child {
+    overflow-x: auto;
+  }
+
+  .cell-3d button {
+    white-space: nowrap;
+    flex: 0 0 auto;
+  }
+
+  .param-row {
+    grid-template-columns: 92px 1fr 46px;
+  }
+
+  .param-choice-row {
+    grid-template-columns: 92px 1fr;
+  }
+}

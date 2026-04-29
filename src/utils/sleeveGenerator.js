@@ -22,6 +22,9 @@ export function generateSleevePattern({
   slitAngleDeg = 4,
   arcSegments = 96,
   style = 'tapered', // 'tapered' | 'base'
+  includeJointSlots = false,
+  jointSlotWidthMm = 14,
+  jointSlotHeightMm = 8,
 }) {
   const Rtop = Math.max(0.1, topDiameterMm / 2)
   const Rbot = Math.max(0.1, bottomDiameterMm / 2)
@@ -32,6 +35,7 @@ export function generateSleevePattern({
   const slitFrac = Math.max(0, Math.min(0.4, slitAngleDeg / 360))
 
   const pieces = []
+  let slotLayout = null
 
   if (dR < 0.5) {
     // Near-cylinder fallback: rectangle (width = arc length minus slit).
@@ -40,6 +44,7 @@ export function generateSleevePattern({
       [0, 0], [C, 0], [C, h], [0, h], [0, 0],
     ]
     pieces.push({ name: 'sleeve_wrap', polyline: rect, closed: true, offset: [0, 0] })
+    slotLayout = { kind: 'rect', width: C, height: h }
   } else {
     const L = Math.sqrt(dR * dR + h * h)
     const Ro = (R1 * L) / dR
@@ -67,6 +72,52 @@ export function generateSleevePattern({
       offset: [0, 0],
       meta: { Ro, Ri, sweep, slantHeightMm: L },
     })
+    slotLayout = { kind: 'sector', Ro, Ri, centerAngle: a0 + sweep / 2 }
+  }
+
+  if (includeJointSlots && slotLayout) {
+    const slotW = Math.max(6, jointSlotWidthMm)
+    const slotH = Math.max(4, jointSlotHeightMm)
+
+    if (slotLayout.kind === 'rect') {
+      const cx = slotLayout.width * 0.5
+      pieces.push({
+        name: 'sleeve_joint_slot_top',
+        polyline: rectanglePolyline(cx, slotLayout.height * 0.28, slotW, slotH),
+        closed: true,
+        offset: [0, 0],
+      })
+      pieces.push({
+        name: 'sleeve_joint_slot_bottom',
+        polyline: rectanglePolyline(cx, slotLayout.height * 0.72, slotW, slotH),
+        closed: true,
+        offset: [0, 0],
+      })
+    } else {
+      const slant = slotLayout.Ro - slotLayout.Ri
+      pieces.push({
+        name: 'sleeve_joint_slot_top',
+        polyline: sectorSlotPolyline(
+          slotLayout.Ro - slant * 0.28,
+          slotLayout.centerAngle,
+          slotW,
+          slotH,
+        ),
+        closed: true,
+        offset: [0, 0],
+      })
+      pieces.push({
+        name: 'sleeve_joint_slot_bottom',
+        polyline: sectorSlotPolyline(
+          slotLayout.Ro - slant * 0.72,
+          slotLayout.centerAngle,
+          slotW,
+          slotH,
+        ),
+        closed: true,
+        offset: [0, 0],
+      })
+    }
   }
 
   // Base-integrated style: add a flat annular base ring that sits under the
@@ -99,4 +150,37 @@ function boundsWidth(poly) {
     if (x > xMax) xMax = x
   }
   return xMax - xMin
+}
+
+function rectanglePolyline(cx, cy, w, h) {
+  const hw = w * 0.5
+  const hh = h * 0.5
+  return [
+    [cx - hw, cy - hh],
+    [cx + hw, cy - hh],
+    [cx + hw, cy + hh],
+    [cx - hw, cy + hh],
+    [cx - hw, cy - hh],
+  ]
+}
+
+function sectorSlotPolyline(centerR, angle, widthTangentialMm, heightRadialMm) {
+  const radial = [Math.cos(angle), Math.sin(angle)]
+  const tangent = [-Math.sin(angle), Math.cos(angle)]
+  const center = [centerR * radial[0], centerR * radial[1]]
+  const hw = widthTangentialMm * 0.5
+  const hh = heightRadialMm * 0.5
+
+  const localCorners = [
+    [-hh, -hw],
+    [-hh, hw],
+    [hh, hw],
+    [hh, -hw],
+    [-hh, -hw],
+  ]
+
+  return localCorners.map(([dr, dt]) => [
+    center[0] + radial[0] * dr + tangent[0] * dt,
+    center[1] + radial[1] * dr + tangent[1] * dt,
+  ])
 }

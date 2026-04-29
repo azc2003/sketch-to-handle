@@ -10,7 +10,7 @@ export default function App() {
     <div className="app">
       <div className="header">
         <h1>Sketch to Handle</h1>
-        <span>Draw a handle on your cup photo</span>
+        <span>Draw a cup handle and export 3D-print or hybrid laser-cut parts</span>
       </div>
       <div className="main-layout">
         <Toolbar />

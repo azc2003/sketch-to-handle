@@ -1,6 +1,7 @@
 import { useMemo, useEffect, useState } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { OrbitControls, Html } from '@react-three/drei'
+import * as THREE from 'three'
 import useStore from '../store'
 import { generateTubularHandle } from '../utils/tubularHandleGenerator'
 import { sampleBezierSpline } from '../utils/bezierPath'
@@ -9,6 +10,7 @@ function HandleScene({ partView }) {
   const image = useStore(s => s.image)
   const curvePoints = useStore(s => s.curvePoints)
 
+  const fabricationMode = useStore(s => s.fabricationMode)
   const smoothLevel = useStore(s => s.smoothLevel)
   const handleMode = useStore(s => s.handleMode)
   const handleHeightM = useStore(s => s.handleHeightM)
@@ -81,9 +83,13 @@ function HandleScene({ partView }) {
     result.group.traverse(child => {
       if (!child.isMesh) return
       const part = child.userData?.part
+      if (fabricationMode === 'hybrid') {
+        child.visible = (partView === 'assembly' || partView === 'handle') && part === 'handle'
+        return
+      }
       child.visible = partView === 'assembly' || part === partView
     })
-  }, [result, partView])
+  }, [result, partView, fabricationMode])
 
   useEffect(() => {
     if (result?.group) {
@@ -116,11 +122,89 @@ function HandleScene({ partView }) {
     )
   }
 
-  return <primitive object={result.group} />
+  return (
+    <>
+      <primitive object={result.group} />
+      <SleeveReference visible={fabricationMode === 'hybrid' && (partView === 'assembly' || partView === 'sleeve')} />
+    </>
+  )
+}
+
+function SleeveReference({ visible }) {
+  const handleHeightM = useStore(s => s.handleHeightM)
+  const cupTopDiameterMm = useStore(s => s.cupTopDiameterMm)
+  const cupBottomDiameterMm = useStore(s => s.cupBottomDiameterMm)
+  const sleeveStyle = useStore(s => s.sleeveStyle)
+  const sleeveSlitAngleDeg = useStore(s => s.sleeveSlitAngleDeg)
+
+  const group = useMemo(() => {
+    const heightMm = Math.max(20, handleHeightM * 1000)
+    const topRadiusMm = Math.max(1, cupTopDiameterMm * 0.5)
+    const bottomRadiusMm = Math.max(1, cupBottomDiameterMm * 0.5)
+    const maxRadiusMm = Math.max(topRadiusMm, bottomRadiusMm)
+    const slitRad = THREE.MathUtils.degToRad(Math.max(0, sleeveSlitAngleDeg))
+    const thetaLength = Math.max(THREE.MathUtils.degToRad(180), Math.PI * 2 - slitRad)
+
+    const sleeveGroup = new THREE.Group()
+    const sleeveGeo = new THREE.CylinderGeometry(
+      topRadiusMm,
+      bottomRadiusMm,
+      heightMm,
+      96,
+      1,
+      true,
+      Math.PI / 2 + slitRad * 0.5,
+      thetaLength,
+    )
+    const sleeveMat = new THREE.MeshStandardMaterial({
+      color: 0x86D9C8,
+      transparent: true,
+      opacity: 0.34,
+      roughness: 0.55,
+      side: THREE.DoubleSide,
+    })
+    const sleeve = new THREE.Mesh(sleeveGeo, sleeveMat)
+    sleeve.position.x = -maxRadiusMm
+    sleeveGroup.add(sleeve)
+
+    if (sleeveStyle === 'base') {
+      const baseRadiusMm = bottomRadiusMm + 8
+      const baseGeo = new THREE.CylinderGeometry(baseRadiusMm, baseRadiusMm, 4, 96)
+      const baseMat = new THREE.MeshStandardMaterial({
+        color: 0x90A4AE,
+        transparent: true,
+        opacity: 0.36,
+        roughness: 0.6,
+        side: THREE.DoubleSide,
+      })
+      const base = new THREE.Mesh(baseGeo, baseMat)
+      base.position.set(-bottomRadiusMm, -heightMm * 0.5 - 3, 0)
+      sleeveGroup.add(base)
+    }
+
+    return sleeveGroup
+  }, [
+    handleHeightM,
+    cupTopDiameterMm,
+    cupBottomDiameterMm,
+    sleeveStyle,
+    sleeveSlitAngleDeg,
+  ])
+
+  if (!visible) return null
+  return <primitive object={group} />
 }
 
 export default function Preview3D() {
   const [view, setView] = useState('assembly')
+  const fabricationMode = useStore(s => s.fabricationMode)
+
+  useEffect(() => {
+    if (fabricationMode === 'hybrid' && (view === 'topRing' || view === 'bottomPlatform')) {
+      setView('assembly')
+    }
+  }, [fabricationMode, view])
+
   const tabBtn = (id, label) => (
     <button
       type="button"
@@ -140,8 +224,9 @@ export default function Preview3D() {
       <div style={{ display: 'flex', gap: 6, padding: '4px 6px', borderBottom: '1px solid #eee' }}>
         {tabBtn('assembly', 'Assembly')}
         {tabBtn('handle', 'Handle')}
-        {tabBtn('topRing', 'Top Ring')}
-        {tabBtn('bottomPlatform', 'Bottom Platform')}
+        {fabricationMode === 'hybrid' && tabBtn('sleeve', 'Sleeve')}
+        {fabricationMode !== 'hybrid' && tabBtn('topRing', 'Top Ring')}
+        {fabricationMode !== 'hybrid' && tabBtn('bottomPlatform', 'Bottom Platform')}
       </div>
       <div style={{ flex: 1, minHeight: 0 }}>
         <Canvas camera={{ position: [0, 0, 200], fov: 50 }} style={{ width: '100%', height: '100%' }}>

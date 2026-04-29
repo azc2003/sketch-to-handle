@@ -7,6 +7,9 @@ export default function StrengthReport() {
   const image = useStore(s => s.image)
   const curvePoints = useStore(s => s.curvePoints)
 
+  const fabricationMode = useStore(s => s.fabricationMode)
+  const sleeveStyle = useStore(s => s.sleeveStyle)
+  const sleeveSlitAngleDeg = useStore(s => s.sleeveSlitAngleDeg)
   const smoothLevel = useStore(s => s.smoothLevel)
   const handleMode = useStore(s => s.handleMode)
   const handleHeightM = useStore(s => s.handleHeightM)
@@ -97,12 +100,23 @@ export default function StrengthReport() {
 
   const pass = report.pass
   const isFoldable = report.handleMode === 'foldable'
+  const isHybrid = fabricationMode === 'hybrid'
 
   return (
     <div className="strength-report">
       <div className={`strength-banner ${pass ? 'pass' : 'fail'}`}>
         {pass ? 'PASS' : 'FAIL'} - Min SF: {report.minimumSafetyFactor}x (target: {report.targetSafetyFactor}x)
       </div>
+
+      <h4>Fabrication</h4>
+      <table className="strength-table">
+        <tbody>
+          <Row label="Mode" value={isHybrid ? 'Laser cut + 3D print' : 'Fully 3D printed'} />
+          {isHybrid && <Row label="Sleeve style" value={sleeveStyle === 'base' ? 'Base integrated' : 'Tapered sleeve'} />}
+          {isHybrid && <Row label="Sleeve height" value={`${Math.round(handleHeightM * 1000 * 100) / 100} mm`} />}
+          {isHybrid && <Row label="Sleeve slit" value={`${sleeveSlitAngleDeg} deg`} />}
+        </tbody>
+      </table>
 
       <h4>Safety Factors</h4>
       <table className="strength-table">

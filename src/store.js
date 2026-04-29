@@ -34,12 +34,20 @@ const useStore = create((set) => ({
   setSmoothLevel: (v) => set({ smoothLevel: v }),
 
   // Handle physical parameters
+  fabricationMode: 'printed',
+  setFabricationMode: (v) => set({ fabricationMode: v }),
   handleMode: 'tubular',
   setHandleMode: (v) => set({ handleMode: v }),
   handleHeightM: 0.12,
   setHandleHeightM: (v) => set({ handleHeightM: v }),
   handleWidthScale: 1.0,
   setHandleWidthScale: (v) => set({ handleWidthScale: v }),
+
+  // Hybrid laser-cut sleeve options
+  sleeveStyle: 'tapered',
+  setSleeveStyle: (v) => set({ sleeveStyle: v }),
+  sleeveSlitAngleDeg: 8,
+  setSleeveSlitAngleDeg: (v) => set({ sleeveSlitAngleDeg: v }),
 
   // Cup geometry
   cupTopDiameterMm: 50,
