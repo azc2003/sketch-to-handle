@@ -253,11 +253,15 @@ export function computeMechanicalDesign(
   const safePadWidthScale = clamp(Number(padWidthScale) || 1.0, 0.5, 2.8)
   const ringClearanceMm = clamp(Number(supportParams.ringClearanceMm) || 0, 0, 10)
   const ringWallThicknessMm = clamp(Number(supportParams.ringWallThicknessMm) || 4, 1.5, 20)
+  const requestedGripRadiusMm = Math.max(2.6, baseDims.baseGripRadiusMm * safeHandleWidthScale)
+  const requestedGripDiameterMm = requestedGripRadiusMm * 2
   const requestedRingHeightMm = Number(supportParams.ringHeightMm) || MIN_TOP_RING_HEIGHT_MM
-  const ringHeightMm = clamp(requestedRingHeightMm, MIN_TOP_RING_HEIGHT_MM, 40)
+  const minimumRingHeightMm = Math.max(MIN_TOP_RING_HEIGHT_MM, requestedGripDiameterMm)
+  const ringHeightMm = Math.min(40, Math.max(requestedRingHeightMm, minimumRingHeightMm))
   const platformMarginMm = clamp(Number(supportParams.platformMarginMm) || 0, 0, 40)
   const requestedPlatformThicknessMm = Number(supportParams.platformThicknessMm) || MIN_BOTTOM_PLATFORM_HEIGHT_MM
-  const platformThicknessMm = clamp(requestedPlatformThicknessMm, MIN_BOTTOM_PLATFORM_HEIGHT_MM, 30)
+  const minimumPlatformThicknessMm = Math.max(MIN_BOTTOM_PLATFORM_HEIGHT_MM, requestedGripDiameterMm)
+  const platformThicknessMm = Math.min(30, Math.max(requestedPlatformThicknessMm, minimumPlatformThicknessMm))
   const jointClearanceMm = clamp(Number(supportParams.jointClearanceMm) || 0.25, 0.05, 0.8)
 
   const massKg = filledWeightG / 1000.0
@@ -286,7 +290,6 @@ export function computeMechanicalDesign(
     )
   }
 
-  const requestedGripRadiusMm = Math.max(2.6, baseDims.baseGripRadiusMm * safeHandleWidthScale)
   const minimumGripRadiusMm = Math.max(ringHeightMm, platformThicknessMm) * 0.5
   const gripRadiusMm = Math.max(requestedGripRadiusMm, minimumGripRadiusMm)
   const rootRadiusMm = Math.max(requiredRootRadiusM * 1000.0, gripRadiusMm * 1.12)
@@ -368,6 +371,8 @@ export function computeMechanicalDesign(
   if (supportSf < targetSafetyFactor) notes.push('Ring and base support estimate is below target safety factor.')
   if (requestedRingHeightMm < MIN_TOP_RING_HEIGHT_MM) notes.push('Top ring height was raised to the minimum printable support height.')
   if (requestedPlatformThicknessMm < MIN_BOTTOM_PLATFORM_HEIGHT_MM) notes.push('Bottom platform height was raised to the minimum printable support height.')
+  if (requestedRingHeightMm >= MIN_TOP_RING_HEIGHT_MM && requestedRingHeightMm < requestedGripDiameterMm) notes.push('Top ring height was raised to match the handle diameter.')
+  if (requestedPlatformThicknessMm >= MIN_BOTTOM_PLATFORM_HEIGHT_MM && requestedPlatformThicknessMm < requestedGripDiameterMm) notes.push('Bottom platform height was raised to match the handle diameter.')
   if (requestedGripRadiusMm < minimumGripRadiusMm) notes.push('Handle diameter was raised to match the connector support height.')
   if (endpointSpanMm < 28.0) notes.push('Vertical distance between ring and base is small; torque load increases.')
   if ((rootRadiusMm / Math.max(gripRadiusMm, 1e-6)) > 1.85) notes.push('Root is much thicker than grip area; handle comfort may decrease.')

@@ -58,11 +58,17 @@ export default function ParameterPanel() {
   const setHandleWidthMm = (widthMm) => {
     const safeWidth = Math.max(minimumHandleWidthMm, Number(widthMm) || minimumHandleWidthMm)
     s.setHandleWidthScale(safeWidth / 10)
+    if (s.ringHeightMm < safeWidth) {
+      s.setRingHeightMm(safeWidth)
+    }
+    if (s.platformThicknessMm < safeWidth) {
+      s.setPlatformThicknessMm(safeWidth)
+    }
   }
 
   const sliders = [
     { label: 'Bottom Radius', value: bottomRadiusMm,        set: setBottomRadiusMm,       min: 18, max: 90, step: 0.5, unit: 'mm' },
-    { label: 'Bottom Height', value: s.platformThicknessMm, set: s.setPlatformThicknessMm, min: MIN_BOTTOM_PLATFORM_HEIGHT_MM, max: 18, step: 0.5, unit: 'mm' },
+    { label: 'Bottom Height', value: s.platformThicknessMm, set: s.setPlatformThicknessMm, min: MIN_BOTTOM_PLATFORM_HEIGHT_MM, max: 28, step: 0.5, unit: 'mm' },
     { label: 'Top Ring Radius', value: topRingRadiusMm,     set: setTopRingRadiusMm,      min: 18, max: 90, step: 0.5, unit: 'mm' },
     { label: 'Top Ring Thickness', value: s.ringWallThicknessMm, set: s.setRingWallThicknessMm, min: 2, max: 14, step: 0.5, unit: 'mm' },
     { label: 'Top Ring Height', value: s.ringHeightMm,      set: s.setRingHeightMm,       min: MIN_TOP_RING_HEIGHT_MM, max: 28, step: 0.5, unit: 'mm' },
