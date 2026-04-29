@@ -21,6 +21,7 @@ export default function StrengthReport() {
   const ringClearanceMm = useStore(s => s.ringClearanceMm)
   const ringWallThicknessMm = useStore(s => s.ringWallThicknessMm)
   const ringHeightMm = useStore(s => s.ringHeightMm)
+  const topRingOpeningRatio = useStore(s => s.topRingOpeningRatio)
   const platformMarginMm = useStore(s => s.platformMarginMm)
   const platformThicknessMm = useStore(s => s.platformThicknessMm)
   const jointClearanceMm = useStore(s => s.jointClearanceMm)
@@ -48,6 +49,7 @@ export default function StrengthReport() {
         ringClearanceMm,
         ringWallThicknessMm,
         ringHeightMm,
+        topRingOpeningRatio,
         platformMarginMm,
         platformThicknessMm,
         jointClearanceMm,
@@ -72,6 +74,7 @@ export default function StrengthReport() {
     ringClearanceMm,
     ringWallThicknessMm,
     ringHeightMm,
+    topRingOpeningRatio,
     platformMarginMm,
     platformThicknessMm,
     jointClearanceMm,
@@ -141,11 +144,11 @@ export default function StrengthReport() {
       <h4>{isFoldable ? 'Handle Body' : 'Handle Tube'}</h4>
       <table className="strength-table">
         <tbody>
-          <Row label="Grip diameter" value={`${report.tubeGripDiameterMm} mm`} />
-          <Row label="Root diameter" value={`${report.tubeRootDiameterMm} mm`} />
+          <Row label="Grip section" value={`${report.tubeGripDiameterMm} x ${report.tubeGripWidthMm} mm`} />
+          <Row label="Root section" value={`${report.tubeRootDiameterMm} x ${report.tubeRootWidthMm} mm`} />
           <Row label="Path length" value={`${report.handlePathLengthMm} mm`} />
           <Row label="Lever arm" value={`${report.leverArmMm} mm`} />
-          <Row label="Endpoint span" value={`${report.endpointSpanMm} mm`} />
+          <Row label="Center height" value={`${report.handleCenterHeightMm} mm`} />
         </tbody>
       </table>
 
@@ -169,6 +172,7 @@ export default function StrengthReport() {
         <tbody>
           <Row label="Top ring ID" value={`${report.topRingInnerDiameterMm} mm`} />
           <Row label="Top ring OD" value={`${report.topRingOuterDiameterMm} mm`} />
+          <Row label="Top ring opening" value={`${report.topRingOpeningRatioPercent}% / ${report.topRingOpeningWidthMm} mm`} />
           <Row label="Ring wall / height" value={`${report.ringWallThicknessMm} / ${report.ringHeightMm} mm`} />
           <Row label="Ring clearance" value={`${report.ringClearanceMm} mm`} />
           <Row label="Base diameter" value={`${report.bottomPlatformDiameterMm} mm`} />

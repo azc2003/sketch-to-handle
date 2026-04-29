@@ -1,12 +1,16 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import useStore from '../store'
 import {
+  DEFAULT_TOP_RING_OPENING_RATIO,
+  MAX_TOP_RING_OPENING_RATIO,
+  MIN_TOP_RING_OPENING_RATIO,
   MIN_BOTTOM_PLATFORM_HEIGHT_MM,
   MIN_TOP_RING_HEIGHT_MM,
 } from '../utils/tubularHandleGenerator'
 
 export default function ParameterPanel() {
   const s = useStore()
+  const [connectorDriver, setConnectorDriver] = useState('Handle Width')
 
   useEffect(() => {
     if (s.fabricationMode !== 'printed') s.setFabricationMode('printed')
@@ -15,33 +19,46 @@ export default function ParameterPanel() {
   const bottomRadiusMm = Math.round((s.cupBottomDiameterMm * 0.5 + s.platformMarginMm) * 10) / 10
   const topRingRadiusMm = Math.round((s.cupTopDiameterMm * 0.5) * 10) / 10
   const handleWidthMm = Math.round((s.handleWidthScale * 10) * 10) / 10
-  const minimumHandleWidthMm = Math.max(
-    6,
+  const topRingOpeningPercent = Math.round((s.topRingOpeningRatio || DEFAULT_TOP_RING_OPENING_RATIO) * 100)
+  const connectorThicknessMm = Math.max(
     MIN_TOP_RING_HEIGHT_MM,
     MIN_BOTTOM_PLATFORM_HEIGHT_MM,
+    handleWidthMm,
     s.ringHeightMm,
     s.platformThicknessMm,
   )
 
   useEffect(() => {
-    if (s.ringHeightMm < MIN_TOP_RING_HEIGHT_MM) {
-      s.setRingHeightMm(MIN_TOP_RING_HEIGHT_MM)
+    if (handleWidthMm !== connectorThicknessMm) {
+      s.setHandleWidthScale(connectorThicknessMm / 10)
     }
-    if (s.platformThicknessMm < MIN_BOTTOM_PLATFORM_HEIGHT_MM) {
-      s.setPlatformThicknessMm(MIN_BOTTOM_PLATFORM_HEIGHT_MM)
+    if (s.ringHeightMm !== connectorThicknessMm) {
+      s.setRingHeightMm(connectorThicknessMm)
     }
-    if (handleWidthMm < minimumHandleWidthMm) {
-      s.setHandleWidthScale(minimumHandleWidthMm / 10)
+    if (s.platformThicknessMm !== connectorThicknessMm) {
+      s.setPlatformThicknessMm(connectorThicknessMm)
     }
   }, [
     handleWidthMm,
-    minimumHandleWidthMm,
+    connectorThicknessMm,
     s.ringHeightMm,
     s.platformThicknessMm,
     s.setHandleWidthScale,
     s.setPlatformThicknessMm,
     s.setRingHeightMm,
   ])
+
+  const setConnectorThicknessMm = (driver, thicknessMm) => {
+    const safeThickness = Math.max(
+      MIN_TOP_RING_HEIGHT_MM,
+      MIN_BOTTOM_PLATFORM_HEIGHT_MM,
+      Number(thicknessMm) || MIN_TOP_RING_HEIGHT_MM,
+    )
+    setConnectorDriver(driver)
+    s.setHandleWidthScale(safeThickness / 10)
+    s.setRingHeightMm(safeThickness)
+    s.setPlatformThicknessMm(safeThickness)
+  }
 
   const setBottomRadiusMm = (radiusMm) => {
     const safeRadius = Math.max(16, Number(radiusMm) || 16)
@@ -56,23 +73,25 @@ export default function ParameterPanel() {
   }
 
   const setHandleWidthMm = (widthMm) => {
-    const safeWidth = Math.max(minimumHandleWidthMm, Number(widthMm) || minimumHandleWidthMm)
-    s.setHandleWidthScale(safeWidth / 10)
-    if (s.ringHeightMm < safeWidth) {
-      s.setRingHeightMm(safeWidth)
-    }
-    if (s.platformThicknessMm < safeWidth) {
-      s.setPlatformThicknessMm(safeWidth)
-    }
+    setConnectorThicknessMm('Handle Width', widthMm)
+  }
+
+  const setTopRingOpeningPercent = (percent) => {
+    const safePercent = Math.max(
+      MIN_TOP_RING_OPENING_RATIO * 100,
+      Math.min(MAX_TOP_RING_OPENING_RATIO * 100, Number(percent) || DEFAULT_TOP_RING_OPENING_RATIO * 100)
+    )
+    s.setTopRingOpeningRatio(safePercent / 100)
   }
 
   const sliders = [
     { label: 'Bottom Radius', value: bottomRadiusMm,        set: setBottomRadiusMm,       min: 18, max: 90, step: 0.5, unit: 'mm' },
-    { label: 'Bottom Height', value: s.platformThicknessMm, set: s.setPlatformThicknessMm, min: MIN_BOTTOM_PLATFORM_HEIGHT_MM, max: 28, step: 0.5, unit: 'mm' },
+    { label: 'Bottom Height', value: s.platformThicknessMm, set: (v) => setConnectorThicknessMm('Bottom Height', v), min: MIN_BOTTOM_PLATFORM_HEIGHT_MM, max: 28, step: 0.5, unit: 'mm', drivenBy: connectorDriver !== 'Bottom Height' ? connectorDriver : null },
     { label: 'Top Ring Radius', value: topRingRadiusMm,     set: setTopRingRadiusMm,      min: 18, max: 90, step: 0.5, unit: 'mm' },
     { label: 'Top Ring Thickness', value: s.ringWallThicknessMm, set: s.setRingWallThicknessMm, min: 2, max: 14, step: 0.5, unit: 'mm' },
-    { label: 'Top Ring Height', value: s.ringHeightMm,      set: s.setRingHeightMm,       min: MIN_TOP_RING_HEIGHT_MM, max: 28, step: 0.5, unit: 'mm' },
-    { label: 'Handle Width', value: handleWidthMm,          set: setHandleWidthMm,        min: minimumHandleWidthMm, max: Math.max(22, minimumHandleWidthMm), step: 0.5, unit: 'mm' },
+    { label: 'Ring Opening', value: topRingOpeningPercent,  set: setTopRingOpeningPercent, min: MIN_TOP_RING_OPENING_RATIO * 100, max: MAX_TOP_RING_OPENING_RATIO * 100, step: 1, unit: '%' },
+    { label: 'Top Ring Height', value: s.ringHeightMm,      set: (v) => setConnectorThicknessMm('Top Ring Height', v), min: MIN_TOP_RING_HEIGHT_MM, max: 28, step: 0.5, unit: 'mm', drivenBy: connectorDriver !== 'Top Ring Height' ? connectorDriver : null },
+    { label: 'Handle Width', value: handleWidthMm,          set: setHandleWidthMm,        min: Math.max(MIN_TOP_RING_HEIGHT_MM, MIN_BOTTOM_PLATFORM_HEIGHT_MM), max: 28, step: 0.5, unit: 'mm', drivenBy: connectorDriver !== 'Handle Width' ? connectorDriver : null },
   ]
 
   return (
@@ -80,7 +99,14 @@ export default function ParameterPanel() {
       <h3>Parameters</h3>
 
       {sliders.map(row => (
-        <div className="param-row" key={row.label}>
+        <div
+          className={`param-row${row.drivenBy ? ' is-driven' : ''}`}
+          key={row.label}
+          onPointerDownCapture={() => {
+            if (row.drivenBy) setConnectorDriver(row.label)
+          }}
+          title={row.drivenBy ? `Driven by ${row.drivenBy}` : undefined}
+        >
           <label>{row.label}</label>
           <input
             type="range"
@@ -88,9 +114,13 @@ export default function ParameterPanel() {
             max={row.max}
             step={row.step || 1}
             value={row.value}
+            disabled={Boolean(row.drivenBy)}
             onChange={e => row.set(Number(e.target.value))}
           />
-          <span className="param-val">{row.value}{row.unit}</span>
+          <span className="param-val">
+            {row.value}{row.unit}
+            {row.drivenBy && <small>Driven by {row.drivenBy.replace(' Width', '').replace(' Height', '')}</small>}
+          </span>
         </div>
       ))}
     </div>

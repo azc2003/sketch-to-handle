@@ -20,6 +20,7 @@ function HandleScene() {
   const ringClearanceMm = useStore(s => s.ringClearanceMm)
   const ringWallThicknessMm = useStore(s => s.ringWallThicknessMm)
   const ringHeightMm = useStore(s => s.ringHeightMm)
+  const topRingOpeningRatio = useStore(s => s.topRingOpeningRatio)
   const platformMarginMm = useStore(s => s.platformMarginMm)
   const platformThicknessMm = useStore(s => s.platformThicknessMm)
   const jointClearanceMm = useStore(s => s.jointClearanceMm)
@@ -47,6 +48,7 @@ function HandleScene() {
         ringClearanceMm,
         ringWallThicknessMm,
         ringHeightMm,
+        topRingOpeningRatio,
         platformMarginMm,
         platformThicknessMm,
         jointClearanceMm,
@@ -71,6 +73,7 @@ function HandleScene() {
     ringClearanceMm,
     ringWallThicknessMm,
     ringHeightMm,
+    topRingOpeningRatio,
     platformMarginMm,
     platformThicknessMm,
     jointClearanceMm,
@@ -97,6 +100,7 @@ function HandleScene() {
       ringClearanceMm,
       ringWallThicknessMm,
       ringHeightMm,
+      topRingOpeningRatio,
       platformMarginMm,
       platformThicknessMm,
       jointClearanceMm,
@@ -117,6 +121,7 @@ function HandleScene() {
     ringClearanceMm,
     ringWallThicknessMm,
     ringHeightMm,
+    topRingOpeningRatio,
     platformMarginMm,
     platformThicknessMm,
     jointClearanceMm,

@@ -11,6 +11,9 @@ const MIN_ENDPOINT_SPAN_MM = 20.0
 const DEFAULT_HANDLE_MODE = 'tubular'
 export const MIN_TOP_RING_HEIGHT_MM = 8
 export const MIN_BOTTOM_PLATFORM_HEIGHT_MM = 6
+export const MIN_TOP_RING_OPENING_RATIO = 0.25
+export const MAX_TOP_RING_OPENING_RATIO = 0.72
+export const DEFAULT_TOP_RING_OPENING_RATIO = 0.53
 
 // ─── Vector helpers (flat [x, y, z] arrays) ───
 
@@ -253,6 +256,11 @@ export function computeMechanicalDesign(
   const safePadWidthScale = clamp(Number(padWidthScale) || 1.0, 0.5, 2.8)
   const ringClearanceMm = clamp(Number(supportParams.ringClearanceMm) || 0, 0, 10)
   const ringWallThicknessMm = clamp(Number(supportParams.ringWallThicknessMm) || 4, 1.5, 20)
+  const topRingOpeningRatio = clamp(
+    Number(supportParams.topRingOpeningRatio) || DEFAULT_TOP_RING_OPENING_RATIO,
+    MIN_TOP_RING_OPENING_RATIO,
+    MAX_TOP_RING_OPENING_RATIO
+  )
   const requestedGripRadiusMm = Math.max(2.6, baseDims.baseGripRadiusMm * safeHandleWidthScale)
   const requestedGripDiameterMm = requestedGripRadiusMm * 2
   const requestedRingHeightMm = Number(supportParams.ringHeightMm) || MIN_TOP_RING_HEIGHT_MM
@@ -266,10 +274,8 @@ export function computeMechanicalDesign(
 
   const massKg = filledWeightG / 1000.0
   const leverArmMm = Math.max(Math.max(...pathPoints.map(p => p[0])), 6.0)
-  const endpointSpanMm = Math.max(
-    Math.abs(pathPoints[pathPoints.length - 1][2] - pathPoints[0][2]),
-    MIN_ENDPOINT_SPAN_MM
-  )
+  const actualEndpointSpanMm = Math.abs(pathPoints[pathPoints.length - 1][2] - pathPoints[0][2])
+  const endpointSpanMm = Math.max(actualEndpointSpanMm, MIN_ENDPOINT_SPAN_MM)
   const spanM = endpointSpanMm / 1000.0
 
   // Segment lengths and total path length
@@ -344,13 +350,17 @@ export function computeMechanicalDesign(
 
   const topRingInnerDiameterMm = Math.max(1, cupTopDiameterMm + ringClearanceMm)
   const topRingOuterDiameterMm = topRingInnerDiameterMm + 2 * ringWallThicknessMm
+  const topRingOpeningAngleRad = 2 * Math.asin(topRingOpeningRatio)
+  const topRingOpeningAngleDeg = topRingOpeningAngleRad * 180 / Math.PI
+  const topRingOpeningWidthMm = topRingInnerDiameterMm * topRingOpeningRatio
   const bottomPlatformDiameterMm = Math.max(1, cupBottomDiameterMm + 2 * platformMarginMm)
 
   const supportBearingAreaMm2 = Math.PI * (
     Math.pow(bottomPlatformDiameterMm * 0.5, 2) -
     Math.pow(cupBottomDiameterMm * 0.5, 2)
   )
-  const ringSectionAreaMm2 = Math.max(1, ringWallThicknessMm * ringHeightMm)
+  const topRingCoverageRatio = (Math.PI * 2 - topRingOpeningAngleRad) / (Math.PI * 2)
+  const ringSectionAreaMm2 = Math.max(1, ringWallThicknessMm * ringHeightMm * topRingCoverageRatio)
   const supportCapacityN = Math.max(
     1,
     (supportBearingAreaMm2 * 0.08) + (ringSectionAreaMm2 * 0.35)
@@ -392,6 +402,7 @@ export function computeMechanicalDesign(
     cupBottomDiameterMm,
     leverArmMm,
     endpointSpanMm,
+    actualEndpointSpanMm,
     structuralSf,
     adhesiveSf,
     supportSf,
@@ -404,6 +415,9 @@ export function computeMechanicalDesign(
     curvatureLimited,
     topRingInnerDiameterMm,
     topRingOuterDiameterMm,
+    topRingOpeningRatio,
+    topRingOpeningAngleDeg,
+    topRingOpeningWidthMm,
     ringClearanceMm,
     ringWallThicknessMm,
     ringHeightMm,
@@ -631,18 +645,40 @@ function buildTopSupportRingMesh(endpoint, design, radialSegments = 96, centerXO
   const heightMm = design.ringHeightMm
   const centerX = Number.isFinite(centerXOverride) ? centerXOverride : -innerRadiusMm
   const centerY = 0
+  const gapAngleRad = (design.topRingOpeningAngleDeg * Math.PI) / 180
+  const startAngle = Math.PI + gapAngleRad * 0.5
+  const endAngle = Math.PI * 3 - gapAngleRad * 0.5
+  const arcSegments = Math.max(32, radialSegments)
 
   const shape = new THREE.Shape()
-  shape.absarc(centerX, centerY, outerRadiusMm, 0, Math.PI * 2, false)
-
-  const innerHole = new THREE.Path()
-  innerHole.absarc(centerX, centerY, innerRadiusMm, 0, Math.PI * 2, true)
-  shape.holes.push(innerHole)
+  shape.moveTo(
+    centerX + outerRadiusMm * Math.cos(startAngle),
+    centerY + outerRadiusMm * Math.sin(startAngle)
+  )
+  for (let i = 1; i <= arcSegments; i++) {
+    const theta = startAngle + (endAngle - startAngle) * (i / arcSegments)
+    shape.lineTo(
+      centerX + outerRadiusMm * Math.cos(theta),
+      centerY + outerRadiusMm * Math.sin(theta)
+    )
+  }
+  shape.lineTo(
+    centerX + innerRadiusMm * Math.cos(endAngle),
+    centerY + innerRadiusMm * Math.sin(endAngle)
+  )
+  for (let i = arcSegments - 1; i >= 0; i--) {
+    const theta = startAngle + (endAngle - startAngle) * (i / arcSegments)
+    shape.lineTo(
+      centerX + innerRadiusMm * Math.cos(theta),
+      centerY + innerRadiusMm * Math.sin(theta)
+    )
+  }
+  shape.closePath()
 
   const geo = new THREE.ExtrudeGeometry(shape, {
     depth: heightMm,
     steps: 1,
-    curveSegments: Math.max(32, radialSegments),
+    curveSegments: arcSegments,
     bevelEnabled: false,
   })
   geo.translate(0, 0, endpoint[2] - heightMm * 0.5)
@@ -1007,7 +1043,9 @@ export function buildStrengthReport(design) {
     adhesiveSafetyFactor: r(design.adhesiveSf),
     supportSafetyFactor: r(design.supportSf),
     tubeGripDiameterMm: r(design.gripRadiusMm * 2),
+    tubeGripWidthMm: r(design.gripRadiusMm * 2.2),
     tubeRootDiameterMm: r(design.rootRadiusMm * 2),
+    tubeRootWidthMm: r(design.rootRadiusMm * 2.28),
     padDiameterMm: r(design.padDiameterMm),
     padThicknessMm: r(design.padThicknessMm),
     padAreaEachMm2: r(design.padAreaEachMm2),
@@ -1015,10 +1053,14 @@ export function buildStrengthReport(design) {
     handlePathLengthMm: r(design.pathLengthMm),
     leverArmMm: r(design.leverArmMm),
     endpointSpanMm: r(design.endpointSpanMm),
+    handleCenterHeightMm: r(design.actualEndpointSpanMm + design.platformThicknessMm * 0.5),
     localPadFitDiametersMm: design.localDiametersMm.map(r),
     padCurvatureRadiiMm: design.cupCurvatureRadiiMm.map(r),
     topRingInnerDiameterMm: r(design.topRingInnerDiameterMm),
     topRingOuterDiameterMm: r(design.topRingOuterDiameterMm),
+    topRingOpeningRatioPercent: r(design.topRingOpeningRatio * 100),
+    topRingOpeningAngleDeg: r(design.topRingOpeningAngleDeg),
+    topRingOpeningWidthMm: r(design.topRingOpeningWidthMm),
     ringClearanceMm: r(design.ringClearanceMm),
     ringWallThicknessMm: r(design.ringWallThicknessMm),
     ringHeightMm: r(design.ringHeightMm),
@@ -1054,6 +1096,7 @@ export function generateTubularHandle(strokePoints, params = {}) {
     ringClearanceMm = 1.5,
     ringWallThicknessMm = 4,
     ringHeightMm = 8,
+    topRingOpeningRatio = DEFAULT_TOP_RING_OPENING_RATIO,
     platformMarginMm = 6,
     platformThicknessMm = 5,
     jointClearanceMm = 0.25,
@@ -1111,6 +1154,7 @@ export function generateTubularHandle(strokePoints, params = {}) {
       ringClearanceMm,
       ringWallThicknessMm,
       ringHeightMm,
+      topRingOpeningRatio,
       platformMarginMm,
       platformThicknessMm,
       jointClearanceMm,
@@ -1199,6 +1243,16 @@ export function generateTubularHandle(strokePoints, params = {}) {
     ]
   }
 
+  const roundedHandleSection = (radius, pathT = 0.5) => {
+    const rootBlend = Math.abs(pathT - 0.5) / 0.5
+    return {
+      shape: 'roundedRect',
+      normalRadiusMm: radius,
+      binormalRadiusMm: radius * (1.1 + rootBlend * 0.04),
+      squareness: 2.65 + rootBlend * 0.45,
+    }
+  }
+
   const transitionSequence = (spec, index) => {
     const c = transformedPathPoints[index]
     const neighborIndex = index === 0 ? 1 : pathPoints.length - 2
@@ -1229,7 +1283,7 @@ export function generateTubularHandle(strokePoints, params = {}) {
         roundedBossSection(0),
         roundedBossSection(0.35),
         roundedBossSection(0.72),
-        design.rootRadiusMm,
+        roundedHandleSection(design.rootRadiusMm, index === 0 ? 0 : 1),
       ],
     }
   }
@@ -1243,7 +1297,12 @@ export function generateTubularHandle(strokePoints, params = {}) {
   ]
   const meshRadii = [
     ...startSequence.radii,
-    ...Array.from(design.tubeRadiiMm).slice(1, -1),
+    ...Array.from(design.tubeRadiiMm)
+      .slice(1, -1)
+      .map((radius, index, arr) => roundedHandleSection(
+        radius,
+        arr.length <= 1 ? 0.5 : (index + 1) / (arr.length + 1)
+      )),
     ...endSequence.radii.slice().reverse(),
   ]
 
@@ -1274,7 +1333,9 @@ export function generateTubularHandle(strokePoints, params = {}) {
     notes: [
       ...design.notes,
       'Top ring and bottom platform share one vertical center axis.',
+      'Top ring is open opposite the handle for side installation around the cup.',
       'Connector bosses use rounded-rectangle roots matched to the ring/base height.',
+      'Handle body uses a soft rounded-rectangle grip section for strength and comfort.',
       'Integrated frame: handle roots are embedded directly into the ring and base edges.',
     ],
   })

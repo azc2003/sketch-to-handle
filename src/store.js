@@ -62,6 +62,8 @@ const useStore = create((set) => ({
   setRingWallThicknessMm: (v) => set({ ringWallThicknessMm: v }),
   ringHeightMm: 8,
   setRingHeightMm: (v) => set({ ringHeightMm: v }),
+  topRingOpeningRatio: 0.53,
+  setTopRingOpeningRatio: (v) => set({ topRingOpeningRatio: v }),
   platformMarginMm: 6,
   setPlatformMarginMm: (v) => set({ platformMarginMm: v }),
   platformThicknessMm: 6,
