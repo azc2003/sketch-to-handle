@@ -611,11 +611,11 @@ function buildDovetailReceiverMesh(endpoint, spec, material, part, connectorOute
   return group
 }
 
-function buildTopSupportRingMesh(endpoint, design, radialSegments = 96) {
+function buildTopSupportRingMesh(endpoint, design, radialSegments = 96, centerXOverride = null) {
   const innerRadiusMm = design.topRingInnerDiameterMm * 0.5
   const outerRadiusMm = design.topRingOuterDiameterMm * 0.5
   const heightMm = design.ringHeightMm
-  const centerX = -innerRadiusMm
+  const centerX = Number.isFinite(centerXOverride) ? centerXOverride : -innerRadiusMm
   const centerY = 0
 
   const shape = new THREE.Shape()
@@ -636,10 +636,12 @@ function buildTopSupportRingMesh(endpoint, design, radialSegments = 96) {
   return geo
 }
 
-function buildBottomPlatformMesh(endpoint, design, radialSegments = 96) {
-  const cupRadiusMm = Math.max(1, design.cupBottomDiameterMm * 0.5)
+function buildBottomPlatformMesh(endpoint, design, radialSegments = 96, centerXOverride = null) {
   const platformRadiusMm = design.bottomPlatformDiameterMm * 0.5
   const thicknessMm = design.platformThicknessMm
+  const centerX = Number.isFinite(centerXOverride)
+    ? centerXOverride
+    : -Math.max(1, design.cupBottomDiameterMm * 0.5)
 
   const geo = new THREE.CylinderGeometry(
     platformRadiusMm,
@@ -648,7 +650,7 @@ function buildBottomPlatformMesh(endpoint, design, radialSegments = 96) {
     Math.max(32, radialSegments)
   )
   geo.rotateX(Math.PI / 2)
-  geo.translate(-cupRadiusMm, 0, endpoint[2] - thicknessMm * 0.5)
+  geo.translate(centerX, 0, endpoint[2] - thicknessMm * 0.5)
   geo.computeVertexNormals()
   return geo
 }
@@ -718,6 +720,19 @@ export function buildTubeMesh(pathPoints, radiiMm, sections = 40, capEnds = true
   const n = pathPoints.length
   if (n < 2) throw new Error('Need at least 2 points for tube')
 
+  const radiusPairAt = (index) => {
+    const value = radiiMm[index]
+    if (typeof value === 'number') {
+      return { normal: value, binormal: value }
+    }
+    const normal = Number(value?.normal ?? value?.normalRadiusMm ?? value?.radius ?? 0)
+    const binormal = Number(value?.binormal ?? value?.binormalRadiusMm ?? value?.radius ?? normal)
+    return {
+      normal: Math.max(0.01, normal),
+      binormal: Math.max(0.01, binormal),
+    }
+  }
+
   // Compute tangents — endpoints hardcoded to [1,0,0] (perpendicular to cup wall)
   // so pad and tube cross-sections align at attachment points.
   // Matches reference: app.py:234-236
@@ -769,12 +784,12 @@ export function buildTubeMesh(pathPoints, radiiMm, sections = 40, capEnds = true
     const binormal = unit(cross(t, normal))
     prevNormal = normal
 
-    const r = radiiMm[i]
+    const r = radiusPairAt(i)
     for (let j = 0; j < sections; j++) {
       vertices.push(
-        p[0] + r * (cosA[j] * normal[0] + sinA[j] * binormal[0]),
-        p[1] + r * (cosA[j] * normal[1] + sinA[j] * binormal[1]),
-        p[2] + r * (cosA[j] * normal[2] + sinA[j] * binormal[2]),
+        p[0] + r.normal * cosA[j] * normal[0] + r.binormal * sinA[j] * binormal[0],
+        p[1] + r.normal * cosA[j] * normal[1] + r.binormal * sinA[j] * binormal[1],
+        p[2] + r.normal * cosA[j] * normal[2] + r.binormal * sinA[j] * binormal[2],
       )
     }
   }
@@ -802,7 +817,8 @@ export function buildTubeMesh(pathPoints, radiiMm, sections = 40, capEnds = true
 
   if (capEnds) {
     const startCenterIdx = vertices.length / 3
-    const startInset = Math.max(0.15, radiiMm[0] * 0.07)
+    const startRadius = radiusPairAt(0)
+    const startInset = Math.max(0.15, Math.max(startRadius.normal, startRadius.binormal) * 0.07)
     vertices.push(
       pathPoints[0][0] + tangents[0][0] * startInset,
       pathPoints[0][1] + tangents[0][1] * startInset,
@@ -810,7 +826,8 @@ export function buildTubeMesh(pathPoints, radiiMm, sections = 40, capEnds = true
     )
 
     const endCenterIdx = vertices.length / 3
-    const endInset = Math.max(0.15, radiiMm[n - 1] * 0.07)
+    const endRadius = radiusPairAt(n - 1)
+    const endInset = Math.max(0.15, Math.max(endRadius.normal, endRadius.binormal) * 0.07)
     vertices.push(
       pathPoints[n - 1][0] - tangents[n - 1][0] * endInset,
       pathPoints[n - 1][1] - tangents[n - 1][1] * endInset,
@@ -1094,8 +1111,9 @@ export function generateTubularHandle(strokePoints, params = {}) {
   const bottomEndpoint = endpoints[0][2] < endpoints[1][2] ? endpoints[0] : endpoints[1]
   const topIndex = pathPoints[0][2] >= pathPoints[pathPoints.length - 1][2] ? 0 : pathPoints.length - 1
   const bottomIndex = topIndex === 0 ? pathPoints.length - 1 : 0
-  const topOutsideEdgeX = design.ringWallThicknessMm
-  const bottomOutsideEdgeX = design.platformMarginMm
+  const cupCenterX = -design.topRingInnerDiameterMm * 0.5
+  const topOutsideEdgeX = cupCenterX + design.topRingOuterDiameterMm * 0.5
+  const bottomOutsideEdgeX = cupCenterX + design.bottomPlatformDiameterMm * 0.5
   const bossEmbedMm = Math.max(1.5, design.rootRadiusMm * 0.38)
   const bossLengthMm = Math.max(6.5, design.rootRadiusMm * 1.15)
   const transitionLengthMm = Math.max(8.5, design.rootRadiusMm * 1.55)
@@ -1107,11 +1125,20 @@ export function generateTubularHandle(strokePoints, params = {}) {
 
   const connectionSpecForIndex = (index) => {
     const supportOuterEdgeX = supportOuterEdgeForIndex(index)
-    const z = pathPoints[index][2]
+    const isBottom = index === bottomIndex
+    const z = isBottom
+      ? bottomEndpoint[2] - design.platformThicknessMm * 0.5
+      : topEndpoint[2]
+    const supportHeightMm = isBottom ? design.platformThicknessMm : design.ringHeightMm
+    const bossVerticalRadiusMm = Math.min(
+      design.rootRadiusMm,
+      Math.max(0.6, supportHeightMm * 0.46)
+    )
     return {
       a: [supportOuterEdgeX - bossEmbedMm, 0, z],
       b: [supportOuterEdgeX + bossLengthMm, 0, z],
       c: [supportOuterEdgeX + bossLengthMm + transitionLengthMm, 0, z],
+      bossVerticalRadiusMm,
     }
   }
 
@@ -1146,28 +1173,41 @@ export function generateTubularHandle(strokePoints, params = {}) {
     const handleTangent = unit(vecSub(transformedPathPoints[neighborIndex], c))
     const startTangent = [transitionTangentMm, 0, 0]
     const endTangent = vecScale(handleTangent[0] < 0 ? [1, 0, 0] : handleTangent, transitionTangentMm)
-    return [
+    const points = [
       spec.a,
       spec.b,
       hermitePoint(spec.b, c, startTangent, endTangent, 0.34),
       hermitePoint(spec.b, c, startTangent, endTangent, 0.68),
       c,
     ]
+    const ellipseRadius = (t) => ({
+      normal: spec.bossVerticalRadiusMm + (design.rootRadiusMm - spec.bossVerticalRadiusMm) * t,
+      binormal: design.rootRadiusMm,
+    })
+    return {
+      points,
+      radii: [
+        ellipseRadius(0),
+        ellipseRadius(0),
+        ellipseRadius(0.35),
+        ellipseRadius(0.72),
+        design.rootRadiusMm,
+      ],
+    }
   }
 
   const startSequence = transitionSequence(startSpec, 0)
   const endSequence = transitionSequence(endSpec, pathPoints.length - 1)
   const meshPathPoints = [
-    ...startSequence,
+    ...startSequence.points,
     ...transformedPathPoints.slice(1, -1),
-    ...endSequence.slice().reverse(),
+    ...endSequence.points.slice().reverse(),
   ]
   const meshRadii = [
-    ...startSequence.map(() => design.rootRadiusMm),
+    ...startSequence.radii,
     ...Array.from(design.tubeRadiiMm).slice(1, -1),
-    ...endSequence.map(() => design.rootRadiusMm),
+    ...endSequence.radii.slice().reverse(),
   ]
-  const meshRadiiMm = Float64Array.from(meshRadii)
 
   // 9. Build meshes
   const group = new THREE.Group()
@@ -1177,13 +1217,13 @@ export function generateTubularHandle(strokePoints, params = {}) {
   })
 
   // Tube handle between top ring and bottom platform.
-  const tubeGeo = buildTubeMesh(meshPathPoints, meshRadiiMm, 40, false)
+  const tubeGeo = buildTubeMesh(meshPathPoints, meshRadii, 40, true)
   group.add(tagPart(new THREE.Mesh(tubeGeo, handleMat), 'handle'))
 
-  const topRingGeo = buildTopSupportRingMesh(topEndpoint, design)
+  const topRingGeo = buildTopSupportRingMesh(topEndpoint, design, 96, cupCenterX)
   group.add(tagPart(new THREE.Mesh(topRingGeo, handleMat), 'topRing'))
 
-  const platformGeo = buildBottomPlatformMesh(bottomEndpoint, design)
+  const platformGeo = buildBottomPlatformMesh(bottomEndpoint, design, 96, cupCenterX)
   group.add(tagPart(new THREE.Mesh(platformGeo, handleMat), 'bottomPlatform'))
 
   // Coordinate system: reference uses X=radial, Y=0, Z=vertical
@@ -1195,6 +1235,8 @@ export function generateTubularHandle(strokePoints, params = {}) {
     ...design,
     notes: [
       ...design.notes,
+      'Top ring and bottom platform share one vertical center axis.',
+      'Connector bosses are flattened to stay inside the ring/base height and capped inside the supports.',
       'Integrated frame: handle roots are embedded directly into the ring and base edges.',
     ],
   })
