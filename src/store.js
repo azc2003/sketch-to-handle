@@ -38,6 +38,8 @@ const useStore = create((set) => ({
   setFabricationMode: (v) => set({ fabricationMode: v }),
   handleMode: 'tubular',
   setHandleMode: (v) => set({ handleMode: v }),
+  printMode: 'single',
+  setPrintMode: (v) => set({ printMode: v }),
   handleHeightM: 0.12,
   setHandleHeightM: (v) => set({ handleHeightM: v }),
   handleWidthScale: 1.0,
@@ -73,8 +75,8 @@ const useStore = create((set) => ({
   targetSafetyFactor: 5.0,
   setTargetSafetyFactor: (v) => set({ targetSafetyFactor: v }),
 
-  // Dovetail fit between printed parts
-  jointClearanceMm: 0.2,
+  // Friction-fit clearance between printed split parts
+  jointClearanceMm: 0.22,
   setJointClearanceMm: (v) => set({ jointClearanceMm: v }),
 
   // Export options

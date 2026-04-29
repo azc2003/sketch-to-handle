@@ -11,6 +11,7 @@ function HandleScene() {
 
   const smoothLevel = useStore(s => s.smoothLevel)
   const handleMode = useStore(s => s.handleMode)
+  const printMode = useStore(s => s.printMode)
   const handleHeightM = useStore(s => s.handleHeightM)
   const handleWidthScale = useStore(s => s.handleWidthScale)
   const handleDepthScale = useStore(s => s.handleDepthScale)
@@ -39,6 +40,7 @@ function HandleScene() {
         imageWidthPx: image?.width || 1000,
         imageHeightPx: image?.height || 1000,
         handleMode,
+        printMode,
         handleHeightM,
         handleWidthScale,
         handleDepthScale,
@@ -64,6 +66,7 @@ function HandleScene() {
     inputStroke,
     image,
     handleMode,
+    printMode,
     handleHeightM,
     handleWidthScale,
     handleDepthScale,
@@ -91,6 +94,7 @@ function HandleScene() {
       image?.width || 1000,
       image?.height || 1000,
       handleMode,
+      printMode,
       handleHeightM,
       handleWidthScale,
       handleDepthScale,
@@ -112,6 +116,7 @@ function HandleScene() {
     curvePoints,
     image,
     handleMode,
+    printMode,
     handleHeightM,
     handleWidthScale,
     handleDepthScale,

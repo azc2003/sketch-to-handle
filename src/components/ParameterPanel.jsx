@@ -98,6 +98,14 @@ export default function ParameterPanel() {
     <div className="param-group">
       <h3>Parameters</h3>
 
+      <div className="param-choice-row">
+        <label>Print Mode</label>
+        <select value={s.printMode} onChange={e => s.setPrintMode(e.target.value)}>
+          <option value="single">Single-piece</option>
+          <option value="split">Split print</option>
+        </select>
+      </div>
+
       {sliders.map(row => (
         <div
           className={`param-row${row.drivenBy ? ' is-driven' : ''}`}

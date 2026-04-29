@@ -270,7 +270,7 @@ export function computeMechanicalDesign(
   const requestedPlatformThicknessMm = Number(supportParams.platformThicknessMm) || MIN_BOTTOM_PLATFORM_HEIGHT_MM
   const minimumPlatformThicknessMm = Math.max(MIN_BOTTOM_PLATFORM_HEIGHT_MM, requestedGripDiameterMm)
   const platformThicknessMm = Math.min(30, Math.max(requestedPlatformThicknessMm, minimumPlatformThicknessMm))
-  const jointClearanceMm = clamp(Number(supportParams.jointClearanceMm) || 0.25, 0.05, 0.8)
+  const jointClearanceMm = clamp(Number(supportParams.jointClearanceMm) || 0.22, 0.1, 0.35)
 
   const massKg = filledWeightG / 1000.0
   const leverArmMm = Math.max(Math.max(...pathPoints.map(p => p[0])), 6.0)
@@ -522,124 +522,151 @@ function tagPart(mesh, part) {
   return mesh
 }
 
-function buildDovetailSpec(design) {
-  const rootDiameterMm = design.rootRadiusMm * 2
-  const maleNeckWidthMm = Math.max(rootDiameterMm * 1.25, 10)
-  const maleHeadWidthMm = maleNeckWidthMm + Math.max(4, design.ringWallThicknessMm * 0.8)
-  const heightMm = Math.max(rootDiameterMm * 1.45, 10)
-  const depthMm = clamp(design.ringWallThicknessMm * 3.2, 11, 15)
-  const clearanceMm = clamp(design.jointClearanceMm ?? 0.25, 0.05, 0.8)
+function splitConnectorSpec(design) {
+  const outerHeightMm = Math.max(MIN_TOP_RING_HEIGHT_MM, design.ringHeightMm)
+  const outerWidthMm = outerHeightMm * 1.28
+  const sleeveWallMm = clamp(outerHeightMm * 0.18, 1.35, 2.4)
+  const clearanceMm = clamp(design.jointClearanceMm ?? 0.22, 0.1, 0.35)
+  const plugHeightMm = Math.max(3.0, outerHeightMm - sleeveWallMm * 2 - clearanceMm * 2)
+  const plugWidthMm = Math.max(4.0, outerWidthMm - sleeveWallMm * 2 - clearanceMm * 2)
+  const socketHeightMm = plugHeightMm + clearanceMm * 2
+  const socketWidthMm = plugWidthMm + clearanceMm * 2
+  const insertionDepthMm = clamp(outerHeightMm * 2.4, 16, 24)
+  const plugRootOverlapMm = Math.min(1.4, Math.max(0.7, design.ringWallThicknessMm * 0.28))
+  const sleeveOverlapMm = Math.min(1.2, Math.max(0.5, outerHeightMm * 0.08))
 
   return {
-    maleNeckWidthMm,
-    maleHeadWidthMm,
-    heightMm,
-    depthMm,
     clearanceMm,
-    femaleNeckWidthMm: maleNeckWidthMm + clearanceMm * 2,
-    femaleHeadWidthMm: maleHeadWidthMm + clearanceMm * 2,
-    femaleHeightMm: heightMm + clearanceMm * 2,
-    railWallMm: Math.max(2.2, design.ringWallThicknessMm * 0.55),
-    backPlateMm: Math.max(2, design.ringWallThicknessMm * 0.45),
+    outerHeightMm,
+    outerWidthMm,
+    sleeveWallMm,
+    plugHeightMm,
+    plugWidthMm,
+    socketHeightMm,
+    socketWidthMm,
+    insertionDepthMm,
+    plugRootOverlapMm,
+    sleeveOverlapMm,
   }
 }
 
-function buildDovetailTenonMesh(endpoint, spec, material, connectorOuterEndX) {
-  const outerEndX = Number.isFinite(connectorOuterEndX) ? Math.max(spec.depthMm, connectorOuterEndX) : spec.depthMm
-  const halfNeck = spec.maleNeckWidthMm * 0.5
-  const halfHead = spec.maleHeadWidthMm * 0.5
-  const halfHeight = spec.heightMm * 0.5
-
-  const x0 = outerEndX - spec.depthMm
-  const x1 = outerEndX
-  const z0 = endpoint[2] - halfHeight
-  const z1 = endpoint[2] + halfHeight
-  const profile = [
-    [-halfNeck, z0],
-    [halfNeck, z0],
-    [halfHead, z1],
-    [-halfHead, z1],
-  ]
-
-  const vertices = []
-  for (const x of [x0, x1]) {
-    for (const [y, z] of profile) vertices.push(x, y, z)
+function roundedRectPath(path, halfWidth, halfHeight, radius, reverse = false) {
+  const r = Math.min(Math.max(0, radius), halfWidth, halfHeight)
+  if (reverse) {
+    path.moveTo(-halfWidth + r, -halfHeight)
+    path.quadraticCurveTo(-halfWidth, -halfHeight, -halfWidth, -halfHeight + r)
+    path.lineTo(-halfWidth, halfHeight - r)
+    path.quadraticCurveTo(-halfWidth, halfHeight, -halfWidth + r, halfHeight)
+    path.lineTo(halfWidth - r, halfHeight)
+    path.quadraticCurveTo(halfWidth, halfHeight, halfWidth, halfHeight - r)
+    path.lineTo(halfWidth, -halfHeight + r)
+    path.quadraticCurveTo(halfWidth, -halfHeight, halfWidth - r, -halfHeight)
+    path.lineTo(-halfWidth + r, -halfHeight)
+  } else {
+    path.moveTo(-halfWidth + r, -halfHeight)
+    path.lineTo(halfWidth - r, -halfHeight)
+    path.quadraticCurveTo(halfWidth, -halfHeight, halfWidth, -halfHeight + r)
+    path.lineTo(halfWidth, halfHeight - r)
+    path.quadraticCurveTo(halfWidth, halfHeight, halfWidth - r, halfHeight)
+    path.lineTo(-halfWidth + r, halfHeight)
+    path.quadraticCurveTo(-halfWidth, halfHeight, -halfWidth, halfHeight - r)
+    path.lineTo(-halfWidth, -halfHeight + r)
+    path.quadraticCurveTo(-halfWidth, -halfHeight, -halfWidth + r, -halfHeight)
   }
-
-  const indices = [
-    0, 1, 2, 0, 2, 3,
-    4, 6, 5, 4, 7, 6,
-    0, 4, 5, 0, 5, 1,
-    1, 5, 6, 1, 6, 2,
-    2, 6, 7, 2, 7, 3,
-    3, 7, 4, 3, 4, 0,
-  ]
-
-  const geo = new THREE.BufferGeometry()
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3))
-  geo.setIndex(indices)
-  geo.computeVertexNormals()
-  return tagPart(new THREE.Mesh(geo, material), 'handle')
+  path.closePath()
 }
 
-function buildDovetailReceiverMesh(endpoint, spec, material, part, connectorOuterEndX, bodyOutsideEdgeX = connectorOuterEndX) {
-  const outerEndX = Number.isFinite(connectorOuterEndX) ? Math.max(spec.depthMm, connectorOuterEndX) : spec.depthMm
-  const slotStartX = outerEndX - spec.depthMm
-  const bodyEdgeX = Number.isFinite(bodyOutsideEdgeX) ? Math.max(0, bodyOutsideEdgeX) : slotStartX
-  const embedMm = Math.max(2.5, spec.railWallMm, slotStartX - bodyEdgeX + 2.0)
-  const receiverStartX = Math.max(0, slotStartX - embedMm)
-  const receiverDepthMm = outerEndX - receiverStartX
-  const halfOuterWidth = spec.femaleHeadWidthMm * 0.5 + spec.railWallMm
-  const halfOuterHeight = spec.femaleHeightMm * 0.5 + spec.railWallMm
-  const halfSlotNeck = spec.femaleNeckWidthMm * 0.5
-  const halfSlotHead = spec.femaleHeadWidthMm * 0.5
-  const halfSlotHeight = spec.femaleHeightMm * 0.5
-
+function buildRoundedRectPrismX({
+  startX,
+  depthMm,
+  centerZ,
+  widthMm,
+  heightMm,
+  cornerRadiusMm,
+  material,
+  part,
+}) {
   const shape = new THREE.Shape()
-  shape.moveTo(-halfOuterWidth, -halfOuterHeight)
-  shape.lineTo(halfOuterWidth, -halfOuterHeight)
-  shape.lineTo(halfOuterWidth, halfOuterHeight)
-  shape.lineTo(-halfOuterWidth, halfOuterHeight)
-  shape.closePath()
-
-  const slot = new THREE.Path()
-  slot.moveTo(-halfSlotNeck, -halfSlotHeight)
-  slot.lineTo(halfSlotNeck, -halfSlotHeight)
-  slot.lineTo(halfSlotHead, halfSlotHeight)
-  slot.lineTo(-halfSlotHead, halfSlotHeight)
-  slot.closePath()
-  shape.holes.push(slot)
+  roundedRectPath(shape, widthMm * 0.5, heightMm * 0.5, cornerRadiusMm)
 
   const geo = new THREE.ExtrudeGeometry(shape, {
-    depth: receiverDepthMm,
+    depth: depthMm,
     steps: 1,
+    curveSegments: 8,
     bevelEnabled: false,
   })
   geo.applyMatrix4(new THREE.Matrix4().set(
-    0, 0, 1, receiverStartX,
+    0, 0, 1, startX,
+    1, 0, 0, 0,
+    0, 1, 0, centerZ,
+    0, 0, 0, 1
+  ))
+  geo.computeVertexNormals()
+  return tagPart(new THREE.Mesh(geo, material), part)
+}
+
+function buildRoundedRectSocketMesh(endpoint, spec, material, startX) {
+  const outerShape = new THREE.Shape()
+  roundedRectPath(
+    outerShape,
+    spec.outerWidthMm * 0.5,
+    spec.outerHeightMm * 0.5,
+    Math.min(spec.sleeveWallMm * 1.15, spec.outerHeightMm * 0.28)
+  )
+
+  const innerPath = new THREE.Path()
+  roundedRectPath(
+    innerPath,
+    spec.socketWidthMm * 0.5,
+    spec.socketHeightMm * 0.5,
+    Math.min(spec.sleeveWallMm * 0.65, spec.socketHeightMm * 0.26),
+    true
+  )
+  outerShape.holes.push(innerPath)
+
+  const geo = new THREE.ExtrudeGeometry(outerShape, {
+    depth: spec.insertionDepthMm,
+    steps: 1,
+    curveSegments: 10,
+    bevelEnabled: false,
+  })
+  geo.applyMatrix4(new THREE.Matrix4().set(
+    0, 0, 1, startX,
     1, 0, 0, 0,
     0, 1, 0, endpoint[2],
     0, 0, 0, 1
   ))
   geo.computeVertexNormals()
-
-  const group = new THREE.Group()
-  group.userData.part = part
-  group.add(tagPart(new THREE.Mesh(geo, material), part))
-
-  const capThicknessMm = Math.max(1.2, spec.backPlateMm)
-  const capGeo = new THREE.BoxGeometry(
-    capThicknessMm,
-    halfOuterWidth * 2,
-    halfOuterHeight * 2
-  )
-  capGeo.translate(receiverStartX - capThicknessMm * 0.5, 0, endpoint[2])
-  group.add(tagPart(new THREE.Mesh(capGeo, material), part))
-
-  return group
+  return tagPart(new THREE.Mesh(geo, material), 'handle')
 }
 
-function buildTopSupportRingMesh(endpoint, design, radialSegments = 96, centerXOverride = null) {
+function mergeBufferGeometries(geometries) {
+  const vertices = []
+  const indices = []
+  let vertexOffset = 0
+
+  for (const geo of geometries) {
+    const position = geo.getAttribute('position')
+    const positionArray = position.array
+    for (let i = 0; i < positionArray.length; i++) vertices.push(positionArray[i])
+
+    if (geo.index) {
+      const indexArray = geo.index.array
+      for (let i = 0; i < indexArray.length; i++) indices.push(indexArray[i] + vertexOffset)
+    } else {
+      for (let i = 0; i < position.count; i++) indices.push(vertexOffset + i)
+    }
+    vertexOffset += position.count
+  }
+
+  const merged = new THREE.BufferGeometry()
+  merged.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(vertices), 3))
+  merged.setIndex(indices)
+  merged.computeVertexNormals()
+  return merged
+}
+
+function buildTopSupportRingMesh(endpoint, design, material, radialSegments = 96, centerXOverride = null, splitPrint = false) {
   const innerRadiusMm = design.topRingInnerDiameterMm * 0.5
   const outerRadiusMm = design.topRingOuterDiameterMm * 0.5
   const heightMm = design.ringHeightMm
@@ -650,38 +677,68 @@ function buildTopSupportRingMesh(endpoint, design, radialSegments = 96, centerXO
   const endAngle = Math.PI * 3 - gapAngleRad * 0.5
   const arcSegments = Math.max(32, radialSegments)
 
-  const shape = new THREE.Shape()
-  shape.moveTo(
-    centerX + outerRadiusMm * Math.cos(startAngle),
-    centerY + outerRadiusMm * Math.sin(startAngle)
-  )
-  for (let i = 1; i <= arcSegments; i++) {
-    const theta = startAngle + (endAngle - startAngle) * (i / arcSegments)
-    shape.lineTo(
-      centerX + outerRadiusMm * Math.cos(theta),
-      centerY + outerRadiusMm * Math.sin(theta)
-    )
-  }
-  shape.lineTo(
-    centerX + innerRadiusMm * Math.cos(endAngle),
-    centerY + innerRadiusMm * Math.sin(endAngle)
-  )
-  for (let i = arcSegments - 1; i >= 0; i--) {
-    const theta = startAngle + (endAngle - startAngle) * (i / arcSegments)
-    shape.lineTo(
-      centerX + innerRadiusMm * Math.cos(theta),
-      centerY + innerRadiusMm * Math.sin(theta)
-    )
-  }
-  shape.closePath()
+  const buildShape = () => {
+    const shape = new THREE.Shape()
+    const lineToPolar = (radiusMm, theta) => {
+      shape.lineTo(
+        centerX + radiusMm * Math.cos(theta),
+        centerY + radiusMm * Math.sin(theta)
+      )
+    }
+    const drawOuterArc = (fromAngle, toAngle, segments) => {
+      for (let i = 1; i <= segments; i++) {
+        const theta = fromAngle + (toAngle - fromAngle) * (i / segments)
+        lineToPolar(outerRadiusMm, theta)
+      }
+    }
 
-  const geo = new THREE.ExtrudeGeometry(shape, {
-    depth: heightMm,
-    steps: 1,
-    curveSegments: arcSegments,
-    bevelEnabled: false,
+    shape.moveTo(
+      centerX + outerRadiusMm * Math.cos(startAngle),
+      centerY + outerRadiusMm * Math.sin(startAngle)
+    )
+
+    drawOuterArc(startAngle, endAngle, arcSegments)
+
+    lineToPolar(innerRadiusMm, endAngle)
+    for (let i = arcSegments - 1; i >= 0; i--) {
+      const theta = startAngle + (endAngle - startAngle) * (i / arcSegments)
+      lineToPolar(innerRadiusMm, theta)
+    }
+    shape.closePath()
+    return shape
+  }
+
+  const buildSlice = (shape, depthMm, zBottom) => {
+    const geo = new THREE.ExtrudeGeometry(shape, {
+      depth: depthMm,
+      steps: 1,
+      curveSegments: arcSegments,
+      bevelEnabled: false,
+    })
+    geo.translate(0, 0, zBottom)
+    return geo
+  }
+
+  const ringGeo = buildSlice(buildShape(), heightMm, endpoint[2] - heightMm * 0.5)
+  if (!splitPrint) {
+    ringGeo.computeVertexNormals()
+    return ringGeo
+  }
+
+  const connector = splitConnectorSpec(design)
+  const plugStartX = centerX + outerRadiusMm - connector.plugRootOverlapMm
+  const plugMesh = buildRoundedRectPrismX({
+    startX: plugStartX,
+    depthMm: connector.insertionDepthMm + connector.plugRootOverlapMm,
+    centerZ: endpoint[2],
+    widthMm: connector.plugWidthMm,
+    heightMm: connector.plugHeightMm,
+    cornerRadiusMm: Math.min(connector.plugHeightMm, connector.plugWidthMm) * 0.22,
+    material,
+    part: 'topRing',
   })
-  geo.translate(0, 0, endpoint[2] - heightMm * 0.5)
+
+  const geo = mergeBufferGeometries([ringGeo, plugMesh.geometry])
   geo.computeVertexNormals()
   return geo
 }
@@ -1037,6 +1094,7 @@ export function buildStrengthReport(design) {
   const r = (v) => Math.round(v * 100) / 100
   return {
     pass: design.minimumSf >= design.targetSafetyFactor,
+    printMode: design.printMode || 'single',
     targetSafetyFactor: r(design.targetSafetyFactor),
     minimumSafetyFactor: r(design.minimumSf),
     structuralSafetyFactor: r(design.structuralSf),
@@ -1061,6 +1119,11 @@ export function buildStrengthReport(design) {
     topRingOpeningRatioPercent: r(design.topRingOpeningRatio * 100),
     topRingOpeningAngleDeg: r(design.topRingOpeningAngleDeg),
     topRingOpeningWidthMm: r(design.topRingOpeningWidthMm),
+    splitPlugLengthMm: design.printMode === 'split' ? r(splitConnectorSpec(design).insertionDepthMm) : 0,
+    splitPlugWidthMm: design.printMode === 'split' ? r(splitConnectorSpec(design).plugWidthMm) : 0,
+    splitPlugHeightMm: design.printMode === 'split' ? r(splitConnectorSpec(design).plugHeightMm) : 0,
+    splitSocketWidthMm: design.printMode === 'split' ? r(splitConnectorSpec(design).socketWidthMm) : 0,
+    splitSocketHeightMm: design.printMode === 'split' ? r(splitConnectorSpec(design).socketHeightMm) : 0,
     ringClearanceMm: r(design.ringClearanceMm),
     ringWallThicknessMm: r(design.ringWallThicknessMm),
     ringHeightMm: r(design.ringHeightMm),
@@ -1087,6 +1150,7 @@ export function generateTubularHandle(strokePoints, params = {}) {
     imageWidthPx = 1000,
     imageHeightPx = 1000,
     handleMode = DEFAULT_HANDLE_MODE,
+    printMode = 'single',
     handleHeightM = 0.12,
     handleWidthScale = 1.0,
     handleDepthScale = 1.6,
@@ -1099,13 +1163,15 @@ export function generateTubularHandle(strokePoints, params = {}) {
     topRingOpeningRatio = DEFAULT_TOP_RING_OPENING_RATIO,
     platformMarginMm = 6,
     platformThicknessMm = 5,
-    jointClearanceMm = 0.25,
+    jointClearanceMm = 0.22,
     filledWeightG = 450,
     targetSafetyFactor = DEFAULT_TARGET_SAFETY_FACTOR,
     smoothLevel = 3,
   } = params
 
   if (!strokePoints || strokePoints.length < 2) return null
+  const activePrintMode = printMode === 'split' ? 'split' : 'single'
+  const splitPrint = activePrintMode === 'split'
 
   // 1. Smooth the stroke
   const smoothed = smoothPath(strokePoints, smoothLevel)
@@ -1197,6 +1263,7 @@ export function generateTubularHandle(strokePoints, params = {}) {
   const bossLengthMm = Math.max(6.5, design.rootRadiusMm * 1.15)
   const transitionLengthMm = Math.max(8.5, design.rootRadiusMm * 1.55)
   const transitionTangentMm = transitionLengthMm * 0.72
+  const splitConnector = splitConnectorSpec(design)
 
   const supportOuterEdgeForIndex = (index) => (
     index === topIndex ? topOutsideEdgeX : bottomOutsideEdgeX
@@ -1208,10 +1275,23 @@ export function generateTubularHandle(strokePoints, params = {}) {
     const z = isBottom
       ? bottomEndpoint[2] - design.platformThicknessMm * 0.5
       : topEndpoint[2]
-    const supportHeightMm = isBottom ? design.platformThicknessMm : design.ringHeightMm
+    const supportHeightMm = isBottom
+      ? design.platformThicknessMm
+      : design.ringHeightMm
     const bossRadiusMm = Math.max(0.6, supportHeightMm * 0.5)
+    if (splitPrint && !isBottom) {
+      const socketEndX = supportOuterEdgeX + splitConnector.insertionDepthMm
+      const socketRootX = socketEndX - splitConnector.sleeveOverlapMm
+      return {
+        a: [socketRootX, 0, z],
+        b: [socketEndX + bossLengthMm * 0.55, 0, z],
+        c: [socketEndX + bossLengthMm * 0.55 + transitionLengthMm, 0, z],
+        bossRadiusMm,
+      }
+    }
+    const embedMm = bossEmbedMm
     return {
-      a: [supportOuterEdgeX - bossEmbedMm, 0, z],
+      a: [supportOuterEdgeX - embedMm, 0, z],
       b: [supportOuterEdgeX + bossLengthMm, 0, z],
       c: [supportOuterEdgeX + bossLengthMm + transitionLengthMm, 0, z],
       bossRadiusMm,
@@ -1317,7 +1397,12 @@ export function generateTubularHandle(strokePoints, params = {}) {
   const tubeGeo = buildTubeMesh(meshPathPoints, meshRadii, 40, true)
   group.add(tagPart(new THREE.Mesh(tubeGeo, handleMat), 'handle'))
 
-  const topRingGeo = buildTopSupportRingMesh(topEndpoint, design, 96, cupCenterX)
+  if (splitPrint) {
+    const socketMesh = buildRoundedRectSocketMesh(topEndpoint, splitConnector, handleMat, topOutsideEdgeX)
+    group.add(socketMesh)
+  }
+
+  const topRingGeo = buildTopSupportRingMesh(topEndpoint, design, handleMat, 96, cupCenterX, splitPrint)
   group.add(tagPart(new THREE.Mesh(topRingGeo, handleMat), 'topRing'))
 
   const platformGeo = buildBottomPlatformMesh(bottomEndpoint, design, 96, cupCenterX)
@@ -1330,13 +1415,22 @@ export function generateTubularHandle(strokePoints, params = {}) {
   // 10. Strength report
   const strengthReport = buildStrengthReport({
     ...design,
+    printMode: activePrintMode,
     notes: [
       ...design.notes,
       'Top ring and bottom platform share one vertical center axis.',
       'Top ring is open opposite the handle for side installation around the cup.',
+      ...(splitPrint
+        ? ['Split print mode: top ring carries a long male plug; the handle boss carries the female friction-fit socket.']
+        : ['Single-piece mode: top ring, handle, and bottom platform are generated as one assembled frame.']),
       'Connector bosses use rounded-rectangle roots matched to the ring/base height.',
       'Handle body uses a soft rounded-rectangle grip section for strength and comfort.',
-      'Integrated frame: handle roots are embedded directly into the ring and base edges.',
+      ...(splitPrint
+        ? [
+            'Bottom platform and handle print as one continuous load-bearing part.',
+            'Friction fit clearance is per side; tune it for your printer before final printing.',
+          ]
+        : []),
     ],
   })
 

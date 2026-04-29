@@ -12,6 +12,7 @@ export default function StrengthReport() {
   const sleeveSlitAngleDeg = useStore(s => s.sleeveSlitAngleDeg)
   const smoothLevel = useStore(s => s.smoothLevel)
   const handleMode = useStore(s => s.handleMode)
+  const printMode = useStore(s => s.printMode)
   const handleHeightM = useStore(s => s.handleHeightM)
   const handleWidthScale = useStore(s => s.handleWidthScale)
   const handleDepthScale = useStore(s => s.handleDepthScale)
@@ -40,6 +41,7 @@ export default function StrengthReport() {
         imageWidthPx: image?.width || 1000,
         imageHeightPx: image?.height || 1000,
         handleMode,
+        printMode,
         handleHeightM,
         handleWidthScale,
         handleDepthScale,
@@ -65,6 +67,7 @@ export default function StrengthReport() {
     inputStroke,
     image,
     handleMode,
+    printMode,
     handleHeightM,
     handleWidthScale,
     handleDepthScale,
@@ -118,6 +121,7 @@ export default function StrengthReport() {
       <table className="strength-table">
         <tbody>
           <Row label="Mode" value={isHybrid ? 'Laser cut + 3D print' : 'Fully 3D printed'} />
+          <Row label="Print split" value={report.printMode === 'split' ? 'Top ring separate' : 'Single-piece'} />
           {isHybrid && <Row label="Sleeve style" value={sleeveStyle === 'base' ? 'Base integrated' : 'Tapered sleeve'} />}
           {isHybrid && <Row label="Sleeve height" value={`${Math.round(handleHeightM * 1000 * 100) / 100} mm`} />}
           {isHybrid && <Row label="Sleeve slit" value={`${sleeveSlitAngleDeg} deg`} />}
@@ -173,6 +177,8 @@ export default function StrengthReport() {
           <Row label="Top ring ID" value={`${report.topRingInnerDiameterMm} mm`} />
           <Row label="Top ring OD" value={`${report.topRingOuterDiameterMm} mm`} />
           <Row label="Top ring opening" value={`${report.topRingOpeningRatioPercent}% / ${report.topRingOpeningWidthMm} mm`} />
+          {report.printMode === 'split' && <Row label="Ring plug" value={`${report.splitPlugLengthMm} L x ${report.splitPlugWidthMm} W x ${report.splitPlugHeightMm} H mm`} />}
+          {report.printMode === 'split' && <Row label="Boss socket" value={`${report.splitSocketWidthMm} W x ${report.splitSocketHeightMm} H mm`} />}
           <Row label="Ring wall / height" value={`${report.ringWallThicknessMm} / ${report.ringHeightMm} mm`} />
           <Row label="Ring clearance" value={`${report.ringClearanceMm} mm`} />
           <Row label="Base diameter" value={`${report.bottomPlatformDiameterMm} mm`} />
