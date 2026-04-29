@@ -619,16 +619,11 @@ function buildTopSupportRingMesh(endpoint, design, radialSegments = 96) {
   const centerY = 0
 
   const shape = new THREE.Shape()
-  const gapAngle = Math.PI / 5
-  const start = Math.PI + gapAngle * 0.5
-  const end = Math.PI * 3 - gapAngle * 0.5
-  shape.absarc(centerX, centerY, outerRadiusMm, start, end, false)
-  shape.lineTo(
-    centerX + innerRadiusMm * Math.cos(end),
-    centerY + innerRadiusMm * Math.sin(end)
-  )
-  shape.absarc(centerX, centerY, innerRadiusMm, end, start, true)
-  shape.closePath()
+  shape.absarc(centerX, centerY, outerRadiusMm, 0, Math.PI * 2, false)
+
+  const innerHole = new THREE.Path()
+  innerHole.absarc(centerX, centerY, innerRadiusMm, 0, Math.PI * 2, true)
+  shape.holes.push(innerHole)
 
   const geo = new THREE.ExtrudeGeometry(shape, {
     depth: heightMm,
@@ -719,7 +714,7 @@ function applyFoldableSafetyPenalty(design, foldSpec) {
   }
 }
 
-export function buildTubeMesh(pathPoints, radiiMm, sections = 40) {
+export function buildTubeMesh(pathPoints, radiiMm, sections = 40, capEnds = true) {
   const n = pathPoints.length
   if (n < 2) throw new Error('Need at least 2 points for tube')
 
@@ -805,29 +800,30 @@ export function buildTubeMesh(pathPoints, radiiMm, sections = 40) {
 
   // No end caps — pads cover the tube ends at attachment points
 
-  // End caps: close both tube roots to avoid visible hollow shadows at pads.
-  const startCenterIdx = vertices.length / 3
-  const startInset = Math.max(0.15, radiiMm[0] * 0.07)
-  vertices.push(
-    pathPoints[0][0] + tangents[0][0] * startInset,
-    pathPoints[0][1] + tangents[0][1] * startInset,
-    pathPoints[0][2] + tangents[0][2] * startInset,
-  )
+  if (capEnds) {
+    const startCenterIdx = vertices.length / 3
+    const startInset = Math.max(0.15, radiiMm[0] * 0.07)
+    vertices.push(
+      pathPoints[0][0] + tangents[0][0] * startInset,
+      pathPoints[0][1] + tangents[0][1] * startInset,
+      pathPoints[0][2] + tangents[0][2] * startInset,
+    )
 
-  const endCenterIdx = vertices.length / 3
-  const endInset = Math.max(0.15, radiiMm[n - 1] * 0.07)
-  vertices.push(
-    pathPoints[n - 1][0] - tangents[n - 1][0] * endInset,
-    pathPoints[n - 1][1] - tangents[n - 1][1] * endInset,
-    pathPoints[n - 1][2] - tangents[n - 1][2] * endInset,
-  )
+    const endCenterIdx = vertices.length / 3
+    const endInset = Math.max(0.15, radiiMm[n - 1] * 0.07)
+    vertices.push(
+      pathPoints[n - 1][0] - tangents[n - 1][0] * endInset,
+      pathPoints[n - 1][1] - tangents[n - 1][1] * endInset,
+      pathPoints[n - 1][2] - tangents[n - 1][2] * endInset,
+    )
 
-  const startBase = 0
-  const endBase = (n - 1) * sections
-  for (let j = 0; j < sections; j++) {
-    const j1 = (j + 1) % sections
-    indices.push(startCenterIdx, startBase + j1, startBase + j)
-    indices.push(endCenterIdx, endBase + j, endBase + j1)
+    const startBase = 0
+    const endBase = (n - 1) * sections
+    for (let j = 0; j < sections; j++) {
+      const j1 = (j + 1) % sections
+      indices.push(startCenterIdx, startBase + j1, startBase + j)
+      indices.push(endCenterIdx, endBase + j, endBase + j1)
+    }
   }
 
   const geo = new THREE.BufferGeometry()
@@ -1100,32 +1096,78 @@ export function generateTubularHandle(strokePoints, params = {}) {
   const bottomIndex = topIndex === 0 ? pathPoints.length - 1 : 0
   const topOutsideEdgeX = design.ringWallThicknessMm
   const bottomOutsideEdgeX = design.platformMarginMm
-  const dovetailSpec = buildDovetailSpec(design)
-  const connectorClearanceFromTubeMm = design.rootRadiusMm + 0.75
-  const topConnectorOuterEndX = Math.max(
-    topOutsideEdgeX + connectorClearanceFromTubeMm,
-    dovetailSpec.depthMm
-  )
-  const bottomConnectorOuterEndX = Math.max(
-    bottomOutsideEdgeX + connectorClearanceFromTubeMm,
-    dovetailSpec.depthMm
-  )
-  const topConnectorStartX = topConnectorOuterEndX - dovetailSpec.depthMm
-  const bottomConnectorStartX = bottomConnectorOuterEndX - dovetailSpec.depthMm
+  const bossEmbedMm = Math.max(1.5, design.rootRadiusMm * 0.38)
+  const bossLengthMm = Math.max(6.5, design.rootRadiusMm * 1.15)
+  const transitionLengthMm = Math.max(8.5, design.rootRadiusMm * 1.55)
+  const transitionTangentMm = transitionLengthMm * 0.72
 
-  // Mesh-only adjustment: embed tube roots into the ring/platform so the STL
-  // has real overlap volume instead of just touching surfaces.
-  const meshPathPoints = pathPoints.map(p => [...p])
-  meshPathPoints[topIndex][0] = topConnectorStartX
-  meshPathPoints[bottomIndex][0] = bottomConnectorStartX
-  const meshRadiiMm = Float64Array.from(design.tubeRadiiMm)
-  const connectorRootRadiusMm = Math.min(
-    design.rootRadiusMm,
-    dovetailSpec.maleNeckWidthMm * 0.36,
-    dovetailSpec.heightMm * 0.30
+  const supportOuterEdgeForIndex = (index) => (
+    index === topIndex ? topOutsideEdgeX : bottomOutsideEdgeX
   )
-  meshRadiiMm[topIndex] = connectorRootRadiusMm
-  meshRadiiMm[bottomIndex] = connectorRootRadiusMm
+
+  const connectionSpecForIndex = (index) => {
+    const supportOuterEdgeX = supportOuterEdgeForIndex(index)
+    const z = pathPoints[index][2]
+    return {
+      a: [supportOuterEdgeX - bossEmbedMm, 0, z],
+      b: [supportOuterEdgeX + bossLengthMm, 0, z],
+      c: [supportOuterEdgeX + bossLengthMm + transitionLengthMm, 0, z],
+    }
+  }
+
+  const startSpec = connectionSpecForIndex(0)
+  const endSpec = connectionSpecForIndex(pathPoints.length - 1)
+
+  // Shift the user-drawn handle curve outward so the drawn endpoints become C,
+  // while A-B-C forms the horizontal boss plus transition from the support.
+  const transformedPathPoints = pathPoints.map((point, index) => {
+    const t = pathPoints.length <= 1 ? 0 : index / (pathPoints.length - 1)
+    const rootOffsetX = startSpec.c[0] * (1 - t) + endSpec.c[0] * t
+    return [point[0] + rootOffsetX, 0, point[2]]
+  })
+
+  const hermitePoint = (p0, p1, m0, m1, t) => {
+    const t2 = t * t
+    const t3 = t2 * t
+    const h00 = 2 * t3 - 3 * t2 + 1
+    const h10 = t3 - 2 * t2 + t
+    const h01 = -2 * t3 + 3 * t2
+    const h11 = t3 - t2
+    return [
+      h00 * p0[0] + h10 * m0[0] + h01 * p1[0] + h11 * m1[0],
+      h00 * p0[1] + h10 * m0[1] + h01 * p1[1] + h11 * m1[1],
+      h00 * p0[2] + h10 * m0[2] + h01 * p1[2] + h11 * m1[2],
+    ]
+  }
+
+  const transitionSequence = (spec, index) => {
+    const c = transformedPathPoints[index]
+    const neighborIndex = index === 0 ? 1 : pathPoints.length - 2
+    const handleTangent = unit(vecSub(transformedPathPoints[neighborIndex], c))
+    const startTangent = [transitionTangentMm, 0, 0]
+    const endTangent = vecScale(handleTangent[0] < 0 ? [1, 0, 0] : handleTangent, transitionTangentMm)
+    return [
+      spec.a,
+      spec.b,
+      hermitePoint(spec.b, c, startTangent, endTangent, 0.34),
+      hermitePoint(spec.b, c, startTangent, endTangent, 0.68),
+      c,
+    ]
+  }
+
+  const startSequence = transitionSequence(startSpec, 0)
+  const endSequence = transitionSequence(endSpec, pathPoints.length - 1)
+  const meshPathPoints = [
+    ...startSequence,
+    ...transformedPathPoints.slice(1, -1),
+    ...endSequence.slice().reverse(),
+  ]
+  const meshRadii = [
+    ...startSequence.map(() => design.rootRadiusMm),
+    ...Array.from(design.tubeRadiiMm).slice(1, -1),
+    ...endSequence.map(() => design.rootRadiusMm),
+  ]
+  const meshRadiiMm = Float64Array.from(meshRadii)
 
   // 9. Build meshes
   const group = new THREE.Group()
@@ -1135,26 +1177,27 @@ export function generateTubularHandle(strokePoints, params = {}) {
   })
 
   // Tube handle between top ring and bottom platform.
-  const tubeGeo = buildTubeMesh(meshPathPoints, meshRadiiMm, 40)
+  const tubeGeo = buildTubeMesh(meshPathPoints, meshRadiiMm, 40, false)
   group.add(tagPart(new THREE.Mesh(tubeGeo, handleMat), 'handle'))
-
-  group.add(buildDovetailTenonMesh(topEndpoint, dovetailSpec, handleMat, topConnectorOuterEndX))
-  group.add(buildDovetailTenonMesh(bottomEndpoint, dovetailSpec, handleMat, bottomConnectorOuterEndX))
 
   const topRingGeo = buildTopSupportRingMesh(topEndpoint, design)
   group.add(tagPart(new THREE.Mesh(topRingGeo, handleMat), 'topRing'))
-  group.add(buildDovetailReceiverMesh(topEndpoint, dovetailSpec, handleMat, 'topRing', topConnectorOuterEndX, topOutsideEdgeX))
 
   const platformGeo = buildBottomPlatformMesh(bottomEndpoint, design)
   group.add(tagPart(new THREE.Mesh(platformGeo, handleMat), 'bottomPlatform'))
-  group.add(buildDovetailReceiverMesh(bottomEndpoint, dovetailSpec, handleMat, 'bottomPlatform', bottomConnectorOuterEndX, bottomOutsideEdgeX))
 
   // Coordinate system: reference uses X=radial, Y=0, Z=vertical
   // Three.js scene uses Y-up. Rotate to align.
   group.rotation.x = -Math.PI / 2
 
   // 10. Strength report
-  const strengthReport = buildStrengthReport(design)
+  const strengthReport = buildStrengthReport({
+    ...design,
+    notes: [
+      ...design.notes,
+      'Integrated frame: handle roots are embedded directly into the ring and base edges.',
+    ],
+  })
 
   return { group, strengthReport, pathPoints }
 }

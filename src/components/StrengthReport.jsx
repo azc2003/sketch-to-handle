@@ -175,7 +175,7 @@ export default function StrengthReport() {
           <Row label="Base thickness" value={`${report.platformThicknessMm} mm`} />
           <Row label="Base margin" value={`${report.platformMarginMm} mm`} />
           <Row label="Bearing area" value={`${report.supportBearingAreaMm2} mm2`} />
-          <Row label="Dovetail clearance" value={`${report.jointClearanceMm} mm`} />
+          <Row label="Print clearance" value={`${report.jointClearanceMm} mm`} />
         </tbody>
       </table>
 
