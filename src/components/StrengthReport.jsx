@@ -14,6 +14,7 @@ export default function StrengthReport() {
   const handleMode = useStore(s => s.handleMode)
   const handleHeightM = useStore(s => s.handleHeightM)
   const handleWidthScale = useStore(s => s.handleWidthScale)
+  const handleDepthScale = useStore(s => s.handleDepthScale)
   const padWidthScale = useStore(s => s.padWidthScale)
   const cupTopDiameterMm = useStore(s => s.cupTopDiameterMm)
   const cupBottomDiameterMm = useStore(s => s.cupBottomDiameterMm)
@@ -40,6 +41,7 @@ export default function StrengthReport() {
         handleMode,
         handleHeightM,
         handleWidthScale,
+        handleDepthScale,
         padWidthScale,
         cupTopDiameterMm,
         cupBottomDiameterMm,
@@ -63,6 +65,7 @@ export default function StrengthReport() {
     handleMode,
     handleHeightM,
     handleWidthScale,
+    handleDepthScale,
     padWidthScale,
     cupTopDiameterMm,
     cupBottomDiameterMm,

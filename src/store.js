@@ -42,6 +42,8 @@ const useStore = create((set) => ({
   setHandleHeightM: (v) => set({ handleHeightM: v }),
   handleWidthScale: 1.0,
   setHandleWidthScale: (v) => set({ handleWidthScale: v }),
+  handleDepthScale: 1.6,
+  setHandleDepthScale: (v) => set({ handleDepthScale: v }),
 
   // Hybrid laser-cut sleeve options
   sleeveStyle: 'tapered',

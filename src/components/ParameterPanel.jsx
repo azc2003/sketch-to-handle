@@ -6,6 +6,7 @@ export default function ParameterPanel() {
   const sliders = [
     { label: 'Handle Height',   value: s.handleHeightM,       set: s.setHandleHeightM,       min: 0.02, max: 0.5,  step: 0.005, unit: 'm' },
     { label: 'Handle Width',    value: s.handleWidthScale,    set: s.setHandleWidthScale,    min: 0.6,  max: 2.0,  step: 0.05,  unit: 'x' },
+    { label: 'Handle Depth',    value: s.handleDepthScale,    set: s.setHandleDepthScale,    min: 0.5,  max: 3.0,  step: 0.05,  unit: 'x' },
     { label: 'Top Diameter',    value: s.cupTopDiameterMm,    set: s.setCupTopDiameterMm,    min: 30,   max: 150,                unit: 'mm' },
     { label: 'Bottom Dia.',     value: s.cupBottomDiameterMm, set: s.setCupBottomDiameterMm, min: 30,   max: 150,                unit: 'mm' },
     { label: 'Ring Clearance',  value: s.ringClearanceMm,     set: s.setRingClearanceMm,     min: 0,    max: 5,    step: 0.25,  unit: 'mm' },

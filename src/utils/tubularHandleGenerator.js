@@ -999,6 +999,7 @@ export function generateTubularHandle(strokePoints, params = {}) {
     handleMode = DEFAULT_HANDLE_MODE,
     handleHeightM = 0.12,
     handleWidthScale = 1.0,
+    handleDepthScale = 1.6,
     padWidthScale = 1.0,
     cupTopDiameterMm = 80,
     cupBottomDiameterMm = 65,
@@ -1038,6 +1039,8 @@ export function generateTubularHandle(strokePoints, params = {}) {
   let pathPoints
   try {
     pathPoints = normalizePoints(rawPoints, imageWidthPx, imageHeightPx, derivedMmPerPixel)
+    const safeDepthScale = clamp(Number(handleDepthScale) || 1.0, 0.35, 3.5)
+    for (const point of pathPoints) point[0] *= safeDepthScale
     pathPoints = smoothCenterline3D(pathPoints, smoothLevel)
   } catch (e) {
     return null // e.g., no horizontal variation
