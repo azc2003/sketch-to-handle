@@ -9,6 +9,8 @@ const ADHESIVE_ALLOWABLE_SHEAR_PA = 180_000
 const DEFAULT_TARGET_SAFETY_FACTOR = 5.0
 const MIN_ENDPOINT_SPAN_MM = 20.0
 const DEFAULT_HANDLE_MODE = 'tubular'
+export const MIN_TOP_RING_HEIGHT_MM = 8
+export const MIN_BOTTOM_PLATFORM_HEIGHT_MM = 6
 
 // ─── Vector helpers (flat [x, y, z] arrays) ───
 
@@ -251,9 +253,11 @@ export function computeMechanicalDesign(
   const safePadWidthScale = clamp(Number(padWidthScale) || 1.0, 0.5, 2.8)
   const ringClearanceMm = clamp(Number(supportParams.ringClearanceMm) || 0, 0, 10)
   const ringWallThicknessMm = clamp(Number(supportParams.ringWallThicknessMm) || 4, 1.5, 20)
-  const ringHeightMm = clamp(Number(supportParams.ringHeightMm) || 8, 2, 40)
+  const requestedRingHeightMm = Number(supportParams.ringHeightMm) || MIN_TOP_RING_HEIGHT_MM
+  const ringHeightMm = clamp(requestedRingHeightMm, MIN_TOP_RING_HEIGHT_MM, 40)
   const platformMarginMm = clamp(Number(supportParams.platformMarginMm) || 0, 0, 40)
-  const platformThicknessMm = clamp(Number(supportParams.platformThicknessMm) || 5, 1.5, 30)
+  const requestedPlatformThicknessMm = Number(supportParams.platformThicknessMm) || MIN_BOTTOM_PLATFORM_HEIGHT_MM
+  const platformThicknessMm = clamp(requestedPlatformThicknessMm, MIN_BOTTOM_PLATFORM_HEIGHT_MM, 30)
   const jointClearanceMm = clamp(Number(supportParams.jointClearanceMm) || 0.25, 0.05, 0.8)
 
   const massKg = filledWeightG / 1000.0
@@ -282,7 +286,9 @@ export function computeMechanicalDesign(
     )
   }
 
-  const gripRadiusMm = Math.max(2.6, baseDims.baseGripRadiusMm * safeHandleWidthScale)
+  const requestedGripRadiusMm = Math.max(2.6, baseDims.baseGripRadiusMm * safeHandleWidthScale)
+  const minimumGripRadiusMm = Math.max(ringHeightMm, platformThicknessMm) * 0.5
+  const gripRadiusMm = Math.max(requestedGripRadiusMm, minimumGripRadiusMm)
   const rootRadiusMm = Math.max(requiredRootRadiusM * 1000.0, gripRadiusMm * 1.12)
   const tubeRadiiMm = radiusProfileAlongPath(pathPoints, gripRadiusMm, rootRadiusMm)
 
@@ -360,6 +366,9 @@ export function computeMechanicalDesign(
   if (curvatureLimited) notes.push('Attachment root sizing is constrained by local cup fit.')
   if (structuralSf < targetSafetyFactor) notes.push('Handle root section is below target safety factor.')
   if (supportSf < targetSafetyFactor) notes.push('Ring and base support estimate is below target safety factor.')
+  if (requestedRingHeightMm < MIN_TOP_RING_HEIGHT_MM) notes.push('Top ring height was raised to the minimum printable support height.')
+  if (requestedPlatformThicknessMm < MIN_BOTTOM_PLATFORM_HEIGHT_MM) notes.push('Bottom platform height was raised to the minimum printable support height.')
+  if (requestedGripRadiusMm < minimumGripRadiusMm) notes.push('Handle diameter was raised to match the connector support height.')
   if (endpointSpanMm < 28.0) notes.push('Vertical distance between ring and base is small; torque load increases.')
   if ((rootRadiusMm / Math.max(gripRadiusMm, 1e-6)) > 1.85) notes.push('Root is much thicker than grip area; handle comfort may decrease.')
   if (pathLengthMm < 0.34 * handleHeightMm) notes.push('Handle path is short relative to handle height; gripping space may be limited.')
@@ -725,11 +734,10 @@ export function buildTubeMesh(pathPoints, radiiMm, sections = 40, capEnds = true
     if (typeof value === 'number') {
       return { normal: value, binormal: value }
     }
-    const normal = Number(value?.normal ?? value?.normalRadiusMm ?? value?.radius ?? 0)
-    const binormal = Number(value?.binormal ?? value?.binormalRadiusMm ?? value?.radius ?? normal)
+    const radius = Number(value?.radius ?? value?.normal ?? value?.normalRadiusMm ?? 0)
     return {
-      normal: Math.max(0.01, normal),
-      binormal: Math.max(0.01, binormal),
+      normal: Math.max(0.01, radius),
+      binormal: Math.max(0.01, radius),
     }
   }
 
@@ -1130,15 +1138,12 @@ export function generateTubularHandle(strokePoints, params = {}) {
       ? bottomEndpoint[2] - design.platformThicknessMm * 0.5
       : topEndpoint[2]
     const supportHeightMm = isBottom ? design.platformThicknessMm : design.ringHeightMm
-    const bossVerticalRadiusMm = Math.min(
-      design.rootRadiusMm,
-      Math.max(0.6, supportHeightMm * 0.46)
-    )
+    const bossRadiusMm = Math.max(0.6, supportHeightMm * 0.5)
     return {
       a: [supportOuterEdgeX - bossEmbedMm, 0, z],
       b: [supportOuterEdgeX + bossLengthMm, 0, z],
       c: [supportOuterEdgeX + bossLengthMm + transitionLengthMm, 0, z],
-      bossVerticalRadiusMm,
+      bossRadiusMm,
     }
   }
 
@@ -1180,17 +1185,14 @@ export function generateTubularHandle(strokePoints, params = {}) {
       hermitePoint(spec.b, c, startTangent, endTangent, 0.68),
       c,
     ]
-    const ellipseRadius = (t) => ({
-      normal: spec.bossVerticalRadiusMm + (design.rootRadiusMm - spec.bossVerticalRadiusMm) * t,
-      binormal: design.rootRadiusMm,
-    })
+    const bossToRootRadius = (t) => spec.bossRadiusMm + (design.rootRadiusMm - spec.bossRadiusMm) * t
     return {
       points,
       radii: [
-        ellipseRadius(0),
-        ellipseRadius(0),
-        ellipseRadius(0.35),
-        ellipseRadius(0.72),
+        spec.bossRadiusMm,
+        spec.bossRadiusMm,
+        bossToRootRadius(0.35),
+        bossToRootRadius(0.72),
         design.rootRadiusMm,
       ],
     }
@@ -1236,7 +1238,7 @@ export function generateTubularHandle(strokePoints, params = {}) {
     notes: [
       ...design.notes,
       'Top ring and bottom platform share one vertical center axis.',
-      'Connector bosses are flattened to stay inside the ring/base height and capped inside the supports.',
+      'Connector bosses stay circular, with boss diameter matched to the ring/base height.',
       'Integrated frame: handle roots are embedded directly into the ring and base edges.',
     ],
   })

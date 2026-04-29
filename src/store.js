@@ -64,7 +64,7 @@ const useStore = create((set) => ({
   setRingHeightMm: (v) => set({ ringHeightMm: v }),
   platformMarginMm: 6,
   setPlatformMarginMm: (v) => set({ platformMarginMm: v }),
-  platformThicknessMm: 5,
+  platformThicknessMm: 6,
   setPlatformThicknessMm: (v) => set({ platformThicknessMm: v }),
   filledWeightG: 450,
   setFilledWeightG: (v) => set({ filledWeightG: v }),
